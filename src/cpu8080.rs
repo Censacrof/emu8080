@@ -1,3 +1,5 @@
+use std::*;
+
 type Reg8 = u8;
 
 struct Reg16 {
@@ -20,7 +22,22 @@ impl From<Reg16> for u16 {
     }
 }
 
-struct Cpu8080 {
+#[derive(Debug)]
+enum MemoryMapError {}
+impl fmt::Display for MemoryMapError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Memory Map Error")
+    }
+}
+
+impl error::Error for MemoryMapError {}
+
+trait MemoryMap {
+    fn read_b(addr: u16) -> Result<u8, MemoryMapError>;
+    fn write_b(addr: u16, b: u8) -> Result<(), MemoryMapError>;
+}
+
+struct Cpu8080<MemMapT> where MemMapT: MemoryMap {
     // accumulator
     reg_a: Reg8,
 
@@ -37,6 +54,9 @@ struct Cpu8080 {
 
     // stack pointer
     reg_sp: Reg16,
+
+    // addressable space (16 bit address)
+    addr_space: MemMapT,
 }
 
 #[cfg(test)]
