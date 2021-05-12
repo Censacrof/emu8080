@@ -1,24 +1,25 @@
 use std::*;
 
 type Reg8 = u8;
+type Reg16 = u16;
 
-struct Reg16 {
+struct Reg8Pair {
     h: Reg8,
     l: Reg8,
 }
 
-impl From<u16> for Reg16 {
-    fn from(item: u16) -> Self {
-        return Reg16 { 
+impl From<Reg16> for Reg8Pair {
+    fn from(item: Reg16) -> Self {
+        return Reg8Pair { 
             h: ((0xff00u16 & item) >> 8) as u8,
             l: (0x00ff & item) as u8, 
         };
     }
 }
 
-impl From<Reg16> for u16 {
-    fn from(item: Reg16) -> Self {
-        return ((item.h as u16) << 8) + (item.l as u16);
+impl From<Reg8Pair> for Reg16 {
+    fn from(item: Reg8Pair) -> Self {
+        return ((item.h as Reg16) << 8) + (item.l as Reg16);
     }
 }
 
@@ -33,8 +34,8 @@ impl fmt::Display for MemoryMapError {
 impl error::Error for MemoryMapError {}
 
 trait MemoryMap {
-    fn read_b(addr: u16) -> Result<u8, MemoryMapError>;
-    fn write_b(addr: u16, b: u8) -> Result<(), MemoryMapError>;
+    fn read_b(&self, addr: u16) -> Result<u8, MemoryMapError>;
+    fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError>;
 }
 
 struct Cpu8080<MemMapT> where MemMapT: MemoryMap {
@@ -42,9 +43,9 @@ struct Cpu8080<MemMapT> where MemMapT: MemoryMap {
     reg_a: Reg8,
 
     // general purpose registers
-    reg_bc: Reg16,
-    reg_de: Reg16,
-    reg_hl: Reg16,
+    reg_bc: Reg8Pair,
+    reg_de: Reg8Pair,
+    reg_hl: Reg8Pair,
 
     // flag register
     reg_f: Reg8,
@@ -59,21 +60,37 @@ struct Cpu8080<MemMapT> where MemMapT: MemoryMap {
     addr_space: MemMapT,
 }
 
+impl<MemMapT> Cpu8080<MemMapT> where MemMapT: MemoryMap {
+    pub fn reset(&mut self) {
+        self.reg_pc = 0u16.into();
+    }
+
+    fn consume(&mut self) -> Result<u8, MemoryMapError> {
+        let b: u8 = self.addr_space.read_b(self.reg_pc.into())?;
+        self.reg_pc += 1;
+        return Ok(b);
+    }
+
+    pub fn cycle(&mut self) {
+        
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_reg16_from_u16() {
-        let reg: Reg16 = Reg16::from(0x8001u16);
+    fn test_reg8pair_from_u16() {
+        let reg: Reg8Pair = Reg8Pair::from(0x8001u16);
 
         assert_eq!(reg.h, 0x80u8);
         assert_eq!(reg.l, 0x01u8);
     }
 
     #[test]
-    fn test_reg16_into_u16() {
-        let val : u16 = Reg16 { h: 0x80u8, l: 0x01u8 }.into();
+    fn test_reg8pair_into_u16() {
+        let val : u16 = Reg8Pair { h: 0x80u8, l: 0x01u8 }.into();
         assert_eq!(val, 0x8001u16);
     }
 }
