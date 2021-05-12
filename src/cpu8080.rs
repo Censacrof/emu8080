@@ -60,6 +60,19 @@ struct Cpu8080<MemMapT> where MemMapT: MemoryMap {
     addr_space: MemMapT,
 }
 
+fn new_cpu8080<MemMapT>(mem_map: MemMapT) -> Cpu8080<MemMapT> where MemMapT: MemoryMap {
+    return Cpu8080 {
+        reg_a: 0,
+        reg_bc: 0.into(),
+        reg_de: 0.into(),
+        reg_hl: 0.into(),
+        reg_f: 0,
+        reg_pc: 0,
+        reg_sp: 0,
+        addr_space: mem_map,
+    }
+}
+
 impl<MemMapT> Cpu8080<MemMapT> where MemMapT: MemoryMap {
     pub fn reset(&mut self) {
         self.reg_pc = 0u16.into();
@@ -92,5 +105,52 @@ mod tests {
     fn test_reg8pair_into_u16() {
         let val : u16 = Reg8Pair { h: 0x80u8, l: 0x01u8 }.into();
         assert_eq!(val, 0x8001u16);
+    }
+
+    struct TestMemory {
+        buff: [u8; 65536],
+    }
+
+    impl MemoryMap for TestMemory {
+        fn read_b(&self, addr: u16) -> Result<u8, MemoryMapError> {
+            let b: u8 = self.buff[addr as usize];
+            return Ok(b);
+        }
+
+        fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError> {
+            self.buff[addr as usize] = b;
+            return Ok(());
+        }
+    }
+
+    #[test]
+    fn test_memory_map() {
+        const addr: u16 = 42u16;
+        const b: u8 = 7u8;
+
+        let mut mem = TestMemory { buff: [0; 65536] };
+
+        mem.write_b(addr, b).unwrap();
+        assert_eq!(mem.read_b(addr).unwrap(), b);
+    }
+
+    #[test]
+    fn test_cpu_consume() {
+        const n_it : u16 = 5;
+        let mut mem = TestMemory { buff: [0; 65536] };
+        for i in 0..n_it {
+            mem.buff[i as usize] = i as u8;
+        }
+
+        let mut cpu = new_cpu8080(mem);
+        cpu.reg_pc = 0;
+
+        for i in 0..n_it {
+            let b = cpu.consume().unwrap();
+            println!("PC: {}; b: {}", cpu.reg_pc, b);
+
+            assert_eq!(b, i as u8);
+            assert_eq!(cpu.reg_pc, i + 1 as u16);
+        }
     }
 }
