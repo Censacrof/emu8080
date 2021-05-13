@@ -14,7 +14,11 @@ struct FlagReg {
     ac: bool,
 }
 
-fn new_flag_reg() -> FlagReg { Default::default() }
+impl FlagReg {
+    fn new() -> Self {
+        return Default::default();
+    }
+}
 
 #[derive(Copy, Clone, Default)]
 struct Reg8Pair {
@@ -94,26 +98,23 @@ where
     addr_space: MemMapT,
 }
 
-fn new_cpu8080<MemMapT>(mem_map: MemMapT) -> Cpu8080<MemMapT>
-where
-    MemMapT: MemoryMap,
-{
-    return Cpu8080 {
-        reg_a: 0,
-        reg_bc: 0.into(),
-        reg_de: 0.into(),
-        reg_hl: 0.into(),
-        reg_pc: 0,
-        reg_sp: 0,
-        flags: new_flag_reg(),
-        addr_space: mem_map,
-    };
-}
-
 impl<MemMapT> Cpu8080<MemMapT>
 where
     MemMapT: MemoryMap,
 {
+    pub fn new(mem_map: MemMapT) -> Self {
+        return Self {
+            reg_a: 0,
+            reg_bc: 0.into(),
+            reg_de: 0.into(),
+            reg_hl: 0.into(),
+            reg_pc: 0,
+            reg_sp: 0,
+            flags: FlagReg::new(),
+            addr_space: mem_map,
+        };
+    }
+
     pub fn reset(&mut self) {
         self.reg_pc = 0u16.into();
     }
@@ -188,7 +189,7 @@ mod tests {
             mem.buff[i as usize] = i as u8;
         }
 
-        let mut cpu = new_cpu8080(mem);
+        let mut cpu = Cpu8080::new(mem);
         cpu.reg_pc = 0;
 
         for i in 0..N_IT {
@@ -210,7 +211,7 @@ mod tests {
         mem.buff[0] = BL;
         mem.buff[1] = BH;
 
-        let mut cpu = new_cpu8080(mem);
+        let mut cpu = Cpu8080::new(mem);
         cpu.reg_pc = 0;
 
         assert_eq!(cpu.consume16().unwrap(), W);
