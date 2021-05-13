@@ -219,6 +219,11 @@ where
         let compl_src: u8 = !src + 1u8;
         return self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
     }
+
+    fn sub_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
+        let compl_src: u16 = !src + 1u16;
+        return self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+    }
 }
 
 #[cfg(test)]
@@ -383,6 +388,27 @@ mod tests {
         let res = cpu.sub_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!("{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
         assert_eq!(res, 0x52u8);
+        assert_eq!(cpu.flags.cf, true);
+    }
+
+    #[test]
+    fn test_cpu_sub_set_flags16() {
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+
+        // ------------
+        let a = 0x0080u16;
+        let b = 0x0001u16;
+        let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#06x} - {:#06x} = {:#06x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        assert_eq!(res, 0x007fu16);
+        assert_eq!(cpu.flags.cf, false);
+
+        // ------------
+        let a = 0x0007u16;
+        let b = 0x00b5u16;
+        let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        assert_eq!(res, 0xff52u16);
         assert_eq!(cpu.flags.cf, true);
     }
 }
