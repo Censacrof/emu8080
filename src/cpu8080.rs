@@ -107,6 +107,7 @@ mod flag_mask {
 
     pub const IS_SUB: u8 = 0x20u8;
     pub const ALL_FLAGS: u8 = 0xff & !IS_SUB;
+    pub const NO_FLAGS: u8 = 0u8;
 }
 
 impl<MemMapT> Cpu8080<MemMapT>
@@ -176,6 +177,42 @@ where
         }
 
         return res8;
+    }
+
+    pub fn add_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
+        let dst32 = dst as u32;
+        let src32 = src as u32;
+        let res32 = dst32 + src32;
+        let res16 = res32 as u16;
+
+        if affected_flags & flag_mask::ZF != 0 {
+            self.flags.zf = res16 == 0;
+        }
+
+        if affected_flags & flag_mask::SF != 0 {
+            self.flags.sf = res16 & 0x8000u16 != 0;
+        }
+
+        if affected_flags & flag_mask::PF != 0 {
+            let mut mod2sum = 0;
+            for i in 0..16 {
+                mod2sum = (mod2sum + (res16 >> i) & 0x0001u16) % 2;
+            }
+            self.flags.pf = mod2sum == 0;
+        }
+        
+        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
+        if affected_flags & flag_mask::CF != 0 {
+            self.flags.cf = (res32 & 0xffff0000u32 != 0) ^ is_sub;
+        }
+
+        if affected_flags & flag_mask::AF != 0 {
+            let dst4 = dst & 0x0f;
+            let src4 = src & 0x0f;
+            self.flags.af = (dst4 + src4) & 0xf0 != 0;
+        }
+
+        return res16;
     }
 }
 
@@ -291,6 +328,35 @@ mod tests {
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
         assert_eq!(res, 0x08u8);
+        assert_eq!(cpu.flags, FlagReg { zf: false, sf: false, pf: false, cf: false, af: false });
+    }
+
+    #[test]
+    fn test_cpu_add_set_flags16() {
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+
+        // ---------------
+        let a = 0xffffu16;
+        let b = 0x0001u16;
+        let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x0000u16);
+        assert_eq!(cpu.flags, FlagReg { zf: true, sf: false, pf: true, cf: true, af: true });
+
+        // ---------------
+        let a = 0x80ffu16;
+        let b = 0x0001u16;
+        let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x8100u16);
+        assert_eq!(cpu.flags, FlagReg { zf: false, sf: true, pf: true, cf: false, af: true });
+
+        // ---------------
+        let a = 0x0005u16;
+        let b = 0x0003u16;
+        let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x08u16);
         assert_eq!(cpu.flags, FlagReg { zf: false, sf: false, pf: false, cf: false, af: false });
     }
 }
