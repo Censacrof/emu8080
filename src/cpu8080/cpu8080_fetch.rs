@@ -44,23 +44,89 @@ where
             0x04 => {
                 self.reg_bc.h = self.add_set_flags8(
                     self.reg_bc.h,
-                    0x01,
+                    1,
                     flag_mask::ALL_FLAGS & !flag_mask::CF // all flags but CF
                 );
             }
 
-            // 0x05	DCR B	1	Z, S, P, AC	B <- B-1
+            // 0x05	DCR B	1	Z, S, P, AC	    B <- B-1
+            0x05 => {
+                self.reg_bc.h = self.sub_set_flags8(
+                    self.reg_bc.h,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all flags but CF
+                );
+            }
+
             // 0x06	MVI B, D8	2		B <- byte 2
+            0x06 => {
+                self.reg_bc.h = self.consume8()?;
+            }
+
             // 0x07	RLC	1	CY	A = A << 1; bit 0 = prev bit 7; CY = prev bit 7
-            // 0x08	-
+            0x07 => {
+                self.flags.cf = self.reg_a & 0x80 != 0;
+                self.reg_a <<= 1;
+                self.reg_a += if self.flags.cf { 1u8 } else { 0u8 };
+            }
+
+            // 0x08	INVALID OPCODE
+
             // 0x09	DAD B	1	CY	HL = HL + BC
+            0x09 => {
+                self.reg_hl = self.add_set_flags16(
+                    self.reg_hl.into(),
+                    self.reg_bc.into(),
+                    flag_mask::CF
+                ).into();
+            }
+
             // 0x0a	LDAX B	1		A <- (BC)
+            0x0a => {
+                self.reg_a = self.addr_space.read_b(self.reg_bc.into())?;
+            }
+
             // 0x0b	DCX B	1		BC = BC-1
+            0x0b => {
+                self.reg_bc = self.sub_set_flags16(
+                    self.reg_bc.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x0c	INR C	1	Z, S, P, AC	C <- C+1
+            0x0c => {
+                self.reg_bc.l = self.add_set_flags8(
+                    self.reg_bc.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x0d	DCR C	1	Z, S, P, AC	C <-C-1
+            0x0d => {
+                self.reg_bc.l = self.add_set_flags8(
+                    self.reg_bc.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x0e	MVI C,D8	2		C <- byte 2
+            0x0e => {
+                self.reg_bc.l = self.consume8()?;
+            }
+
             // 0x0f	RRC	1	CY	A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0
-            // 0x10	-
+            0x0f => {
+                self.flags.cf = self.reg_a & 0x01 != 0;
+                self.reg_a >>= 1;
+                self.reg_a += if self.flags.cf { 0x80u8 } else { 0 };
+            }
+
+            // 0x10	INVALID OPCODE
+
             // 0x11	LXI D,D16	3		D <- byte 3, E <- byte 2
             // 0x12	STAX D	1		(DE) <- A
             // 0x13	INX D	1		DE <- DE + 1
