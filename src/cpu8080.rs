@@ -5,13 +5,13 @@ mod cpu8080_fetch;
 type Reg8 = u8;
 type Reg16 = u16;
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug, PartialEq)]
 struct FlagReg {
     zf: bool,
     sf: bool,
     pf: bool,
     cf: bool,
-    ac: bool,
+    af: bool,
 }
 
 impl FlagReg {
@@ -98,6 +98,17 @@ where
     addr_space: MemMapT,
 }
 
+mod flag_mask {
+    pub const ZF: u8 = 0x01u8;
+    pub const SF: u8 = 0x02u8;
+    pub const PF: u8 = 0x04u8;
+    pub const CF: u8 = 0x08u8;
+    pub const AF: u8 = 0x10u8;
+
+    pub const IS_SUB: u8 = 0x20u8;
+    pub const ALL_FLAGS: u8 = 0xff & !IS_SUB;
+}
+
 impl<MemMapT> Cpu8080<MemMapT>
 where
     MemMapT: MemoryMap,
@@ -130,6 +141,42 @@ where
     }
 
     pub fn cycle(&mut self) {}
+
+    pub fn add_set_flags8(&mut self, dst: u8, src: u8, affected_flags: u8) -> u8 {
+        let dst16 = dst as u16;
+        let src16 = src as u16;
+        let res16 = dst16 + src16;
+        let res8 = res16 as u8;
+
+        if affected_flags & flag_mask::ZF != 0 {
+            self.flags.zf = res8 == 0;
+        }
+
+        if affected_flags & flag_mask::SF != 0 {
+            self.flags.sf = res8 & 0x80u8 != 0;
+        }
+
+        if affected_flags & flag_mask::PF != 0 {
+            let mut mod2sum = 0;
+            for i in 0..8 {
+                mod2sum = (mod2sum + (res8 >> i) & 0x01u8) % 2;
+            }
+            self.flags.pf = mod2sum == 0;
+        }
+        
+        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
+        if affected_flags & flag_mask::CF != 0 {
+            self.flags.cf = (res16 & 0xff00u16 != 0) ^ is_sub;
+        }
+
+        if affected_flags & flag_mask::AF != 0 {
+            let dst4 = dst & 0x0f;
+            let src4 = src & 0x0f;
+            self.flags.af = (dst4 + src4) & 0xf0 != 0;
+        }
+
+        return res8;
+    }
 }
 
 #[cfg(test)]
@@ -216,5 +263,34 @@ mod tests {
 
         assert_eq!(cpu.consume16().unwrap(), W);
         assert_eq!(cpu.reg_pc, 2);
+    }
+
+    #[test]
+    fn test_cpu_add_set_flags8() {
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+
+        // ------------
+        let a = 0xffu8;
+        let b = 0x01u8;
+        let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x00u8);
+        assert_eq!(cpu.flags, FlagReg { zf: true, sf: false, pf: true, cf: true, af: true });
+
+        // ------------
+        let a = 0x8fu8;
+        let b = 0x01u8;
+        let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x90u8);
+        assert_eq!(cpu.flags, FlagReg { zf: false, sf: true, pf: true, cf: false, af: true });
+
+        // ------------
+        let a = 0x05u8;
+        let b = 0x03u8;
+        let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
+        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        assert_eq!(res, 0x08u8);
+        assert_eq!(cpu.flags, FlagReg { zf: false, sf: false, pf: false, cf: false, af: false });
     }
 }
