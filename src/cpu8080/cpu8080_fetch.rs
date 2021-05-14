@@ -255,6 +255,19 @@ where
             }
             
             // XCHG      11101011          -       Exchange DE and HL content
+            "11101011" => {
+                let dst_id = RegId16::DE;
+                let src_id = RegId16::HL;
+                mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
+
+                let swap: u16 = self.get_reg16(dst_id);
+                self.set_reg16(
+                    dst_id,
+                    self.get_reg16(src_id)
+                );
+                self.set_reg16(src_id, swap);
+            }
+
             // ADD S     10000SSS          ZSPCA   Add register to A
             // ADI #     11000110 db       ZSCPA   Add immediate to A
             // ADC S     10001SSS          ZSCPA   Add register to A with carry
