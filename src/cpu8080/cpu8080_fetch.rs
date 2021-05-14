@@ -240,6 +240,20 @@ where
             }
 
             // STAX PP   00PP0010 *1       -       Store indirect through BC or DE
+            "00pp0010" => {
+                let dst_id: RegId16 = REG_ID16_MAP[p as usize];
+                let src_id = RegId8::A;
+                match dst_id {
+                    RegId16::BC | RegId16::DE => {},
+                    _ => panic!("Invalid src operand ({})", src_id),
+                }
+                mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
+
+                let dst_addr: u16 = self.get_reg16(dst_id);
+                let src_val: u8 = self.get_reg8(src_id);
+                self.addr_space.write_b(dst_addr, src_val)?;
+            }
+            
             // XCHG      11101011          -       Exchange DE and HL content
             // ADD S     10000SSS          ZSPCA   Add register to A
             // ADI #     11000110 db       ZSCPA   Add immediate to A
