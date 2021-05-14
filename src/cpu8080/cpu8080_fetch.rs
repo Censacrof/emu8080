@@ -128,37 +128,260 @@ where
             // 0x10	INVALID OPCODE
 
             // 0x11	LXI D,D16	3		D <- byte 3, E <- byte 2
+            0x11 => {
+                self.reg_de = self.consume16()?.into();
+            }
+
             // 0x12	STAX D	1		(DE) <- A
+            0x12 => {
+                self.addr_space.write_b(self.reg_de.into(), self.reg_a)?;
+            }
+
             // 0x13	INX D	1		DE <- DE + 1
+            0x13 => {
+                self.reg_de = self.add_set_flags16(
+                    self.reg_de.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x14	INR D	1	Z, S, P, AC	D <- D+1
+            0x14 => {
+                self.reg_de.h = self.add_set_flags8(
+                    self.reg_de.h,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x15	DCR D	1	Z, S, P, AC	D <- D-1
+            0x15 => {
+                self.reg_de.h = self.sub_set_flags8(
+                    self.reg_de.h,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x16	MVI D, D8	2		D <- byte 2
+            0x16 => {
+                self.reg_de.h = self.consume8()?;
+            }
+
             // 0x17	RAL	1	CY	A = A << 1; bit 0 = prev CY; CY = prev bit 7
-            // 0x18	-
+            0x17 => {
+                let msb = self.reg_a & 0x80u8 != 0;
+                self.reg_a <<= 1;
+                self.reg_a += if self.flags.cf { 0x01u8 } else { 0 };
+                self.flags.cf = msb;
+            }
+
+            // 0x18	INVALID OPCODE
+
             // 0x19	DAD D	1	CY	HL = HL + DE
+            0x19 => {
+                self.reg_hl = self.add_set_flags16(
+                    self.reg_hl.into(),
+                    self.reg_de.into(),
+                    flag_mask::CF
+                ).into();
+            }
+
             // 0x1a	LDAX D	1		A <- (DE)
+            0x1a => {
+                self.reg_a = self.addr_space.read_b(self.reg_de.into())?;
+            }
+
             // 0x1b	DCX D	1		DE = DE-1
+            0x1b => {
+                self.reg_de = self.sub_set_flags16(
+                    self.reg_de.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x1c	INR E	1	Z, S, P, AC	E <-E+1
+            0x1c => {
+                self.reg_de.l = self.add_set_flags8(
+                    self.reg_de.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x1d	DCR E	1	Z, S, P, AC	E <- E-1
+            0x1d => {
+                self.reg_de.l = self.sub_set_flags8(
+                    self.reg_de.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x1e	MVI E,D8	2		E <- byte 2
+            0x1e => {
+                self.reg_de.l = self.consume8()?;
+            }
+
             // 0x1f	RAR	1	CY	A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
-            // 0x20	-
+            0x1f => {
+                let lsb = self.reg_a & 0x01u8 != 0;
+                self.reg_a >>= 1;
+                self.reg_a += if self.flags.cf { 0x80u8 } else { 0 };
+                self.flags.cf = lsb;
+            }
+
+            // 0x20	- INVALID OPCODE
+
             // 0x21	LXI H,D16	3		H <- byte 3, L <- byte 2
+            0x21 => {
+                self.reg_hl = self.consume16()?.into();
+            }
+
             // 0x22	SHLD adr	3		(adr) <-L; (adr+1)<-H
+            0x22 => {
+                let addr = self.consume16()?;
+                self.addr_space.write_w(addr, self.reg_hl.into())?;
+            }
+
             // 0x23	INX H	1		HL <- HL + 1
+            0x23 => {
+                self.reg_hl = self.add_set_flags16(
+                    self.reg_hl.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x24	INR H	1	Z, S, P, AC	H <- H+1
+            0x24 => {
+                self.reg_hl.h = self.add_set_flags8(
+                    self.reg_hl.h,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x25	DCR H	1	Z, S, P, AC	H <- H-1
+            0x25 => {
+                self.reg_hl.h = self.sub_set_flags8(
+                    self.reg_hl.h,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x26	MVI H,D8	2		H <- byte 2
+            0x26 => {
+                self.reg_hl.h = self.consume8()?;
+            }
+
             // 0x27	DAA	1		special
-            // 0x28	-
-            // 0x29	DAD H	1	CY	HL = HL + HI
+            // The eight-bit number in the accumulator is adjusted
+            // to form two four-bit Binary-Coded-Decimal digits by
+            // the following process:
+            //     1. If the value of the least significant 4 bits of the
+            //     accumulator is greater than 9 or if the AC flag
+            //     is set, 6 is added to the accumulator.
+            //     2. If the value of the most significant 4 bits of the
+            //     accumulator is now greater than 9, or if the CY
+            //     flag is set, 6 is added to the most significant 4
+            //     bits of the accumulator.
+            0x27 => {
+                let mut al: u8 = self.reg_a & 0x0fu8;
+                let mut ah: u8 = (self.reg_a & 0xf0u8) >> 4;
+
+                let mut aux_carry = false;
+                let mut carry = false;
+                if al > 9 || self.flags.af {
+                    al += 6u8;
+
+                    if al & 0xf0 != 0 {
+                        aux_carry = true;
+                        
+                        ah += 1;                        
+                        if ah & 0xf0 != 0 {
+                            carry = true;
+                        }
+                    }
+                }
+
+                if ah > 9 || self.flags.cf || carry {
+                    ah += 6;
+                    if ah & 0xf0 != 0 {
+                        carry = true;
+                    }
+                }
+
+                // trick to set accordingly all flags but CF and AF which must be manually set
+                self.add_set_flags8(
+                    ((ah & 0x0f) << 4) + (ah & 0x0f),
+                    0,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF & !flag_mask::AF,
+                );
+
+                self.flags.cf |= carry;
+                self.flags.af |= aux_carry;
+            }
+
+            // 0x28	INVALID OPCODE
+
+            // 0x29	DAD H	1	CY	HL = HL + HL
+            0x29 => {
+                self.reg_hl = self.add_set_flags16(
+                    self.reg_hl.into(),
+                    self.reg_hl.into(),
+                    flag_mask::CF
+                ).into();
+            }
+
             // 0x2a	LHLD adr	3		L <- (adr); H<-(adr+1)
+            0x2a => {
+                let addr: u16 = self.consume16()?;
+                self.reg_hl = self.addr_space.read_w(addr)?.into();
+            }
+
             // 0x2b	DCX H	1		HL = HL-1
+            0x2b => {
+                self.reg_hl = self.sub_set_flags16(
+                    self.reg_hl.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x2c	INR L	1	Z, S, P, AC	L <- L+1
+            0x2c => {
+                self.reg_hl.l = self.add_set_flags8(
+                    self.reg_hl.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x2d	DCR L	1	Z, S, P, AC	L <- L-1
+            0x2d => {
+                self.reg_hl.l = self.sub_set_flags8(
+                    self.reg_hl.l,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+            }
+
             // 0x2e	MVI L, D8	2		L <- byte 2
+            0x2e => {
+                self.reg_hl.l = self.consume8()?;
+            }
+
             // 0x2f	CMA	1		A <- !A
-            // 0x30	-
+            0x2f => {
+                self.reg_a = !self.reg_a;
+            }
+
+            // 0x30	INVALID OPCODE
+            
             // 0x31	LXI SP, D16	3		SP.hi <- byte 3, SP.lo <- byte 2
             // 0x32	STA adr	3		(adr) <- A
             // 0x33	INX SP	1		SP = SP + 1
