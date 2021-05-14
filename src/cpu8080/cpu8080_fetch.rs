@@ -495,6 +495,20 @@ where
             }
 
             // DAD PP    00PP1001          C       Add register pair to HL (16 bit add)
+            "00pp1001" => {
+                let dst_id = RegId16::HL;
+                let src_id: RegId16 = REG_ID16_MAP[p as usize];
+                mnemonic = format!("{:#04x}\tDAD {}, {}", opcode, dst_id, src_id);
+
+                let res = self.add_set_flags16(
+                    self.get_reg16(dst_id),
+                    self.get_reg16(src_id),
+                    flag_mask::CF
+                );
+
+                self.set_reg16(dst_id, res);
+            }
+
             // DAA       00100111          ZSPCA   Decimal Adjust accumulator
             // ANA S     10100SSS          ZSCPA   AND register with A
             // ANI #     11100110 db       ZSPCA   AND immediate with A
