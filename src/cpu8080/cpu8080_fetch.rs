@@ -395,7 +395,7 @@ where
             "11011110" => {
                 let dst_id = RegId8::A;
                 let src_val: u8 = self.consume8()?;
-                mnemonic = format!("{:#04x}\tSBB {}, ${}", opcode, dst_id, src_val);
+                mnemonic = format!("{:#04x}\tSBI {}, ${}", opcode, dst_id, src_val);
 
                 let res = self.sub_set_flags8(
                     self.get_reg8(dst_id),
@@ -407,7 +407,61 @@ where
             }
 
             // INR D     00DDD100          ZSPA    Increment register
+            "00ddd100" => {
+                let dst_id: RegId8 = REG_ID8_MAP[d as usize];
+                mnemonic = format!("{:#04x}\tINR {}", opcode, dst_id);
+
+                let dst_val: u8 = match dst_id {
+                    RegId8::M => {
+                        let dst_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(dst_addr)?
+                    },
+                    _ => self.get_reg8(dst_id)
+                };
+
+                let res: u8 = self.add_set_flags8(
+                    dst_val,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                match dst_id {
+                    RegId8::M => {
+                        let dst_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.write_b(dst_addr, res)?
+                    },
+                    _ => self.set_reg8(dst_id, res)
+                };
+            }
+
             // DCR D     00DDD101          ZSPA    Decrement register
+            "00ddd101" => {
+                let dst_id: RegId8 = REG_ID8_MAP[d as usize];
+                mnemonic = format!("{:#04x}\tDCR {}", opcode, dst_id);
+
+                let dst_val: u8 = match dst_id {
+                    RegId8::M => {
+                        let dst_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(dst_addr)?
+                    },
+                    _ => self.get_reg8(dst_id)
+                };
+
+                let res: u8 = self.sub_set_flags8(
+                    dst_val,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                match dst_id {
+                    RegId8::M => {
+                        let dst_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.write_b(dst_addr, res)?
+                    },
+                    _ => self.set_reg8(dst_id, res)
+                };
+            }
+
             // INX PP    00PP0011          -       Increment register pair
             // DCX PP    00PP1011          -       Decrement register pair
             // DAD PP    00PP1001          C       Add register pair to HL (16 bit add)
