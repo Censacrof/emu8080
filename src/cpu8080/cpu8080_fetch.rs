@@ -146,6 +146,24 @@ where
             }
 
             // MVI D,#   00DDD110 db       -       Move immediate to register
+            "00ddd110" => {
+                let dst_id: RegId8 = REG_ID8_MAP[d as usize];
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_val);
+
+                // set the value of the dst operand
+                match dst_id {
+                    // store dst operand in memory
+                    RegId8::M => {
+                        let addr: u16 = self.reg_hl.into();
+                        self.addr_space.write_b(addr, src_val)?;
+                    },
+
+                    // store dst operand in register
+                    _ => { self.set_reg8(dst_id, src_val); }
+                }
+            }
+
             // LXI PP,#  00PP0001 lb hb    -       Load register pair immediate
             // LDA a     00111010 lb hb    -       Load A from memory
             // STA a     00110010 lb hb    -       Store A to memory
