@@ -2,7 +2,7 @@ use crate::cpu8080::*;
 use bitmatch::bitmatch;
 use std::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum RegId8 {
     A = 0x07,
     B = 0x00,
@@ -14,7 +14,7 @@ enum RegId8 {
     M = 0x06,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum RegId16 {
     BC = 0x00,
     DE = 0x01,
@@ -33,13 +33,29 @@ const REG_ID8_MAP: [RegId8; 8] = [
     RegId8::A,
 ];
 
+impl fmt::Display for RegId8 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RegId8::A => write!(f, "A"),
+            RegId8::B => write!(f, "B"),
+            RegId8::C => write!(f, "C"),
+            RegId8::D => write!(f, "D"),
+            RegId8::E => write!(f, "E"),
+            RegId8::H => write!(f, "H"),
+            RegId8::L => write!(f, "L"),
+
+            RegId8::M => write!(f, "(HL)"),
+        }
+    }
+}
+
 const REG_ID16_MAP: [RegId16; 4] = [RegId16::BC, RegId16::DE, RegId16::HL, RegId16::SP];
 
 impl<MemMapT> Cpu8080<MemMapT>
 where
     MemMapT: MemoryMap,
 {
-    fn get_reg8(self, reg_id: RegId8) -> Reg8 {
+    fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
         match reg_id {
             RegId8::A => self.reg_a,
             RegId8::B => self.reg_bc.h,
@@ -49,7 +65,7 @@ where
             RegId8::H => self.reg_hl.h,
             RegId8::L => self.reg_hl.l,
 
-            RegId8::M => panic!("{:?} it's not a register"),
+            RegId8::M => panic!("{:?} it's not a register", reg_id),
         }
     }
 
@@ -63,11 +79,11 @@ where
             RegId8::H => self.reg_hl.h = val,
             RegId8::L => self.reg_hl.l = val,
 
-            RegId8::M => panic!("{:?} it's not a register"),
+            RegId8::M => panic!("{:?} it's not a register", reg_id),
         }
     }
 
-    fn get_reg16(self, reg_id: RegId16) -> Reg16 {
+    fn get_reg16(&self, reg_id: RegId16) -> Reg16 {
         match reg_id {
             RegId16::BC => self.reg_bc.into(),
             RegId16::DE => self.reg_de.into(),
@@ -88,17 +104,46 @@ where
     #[bitmatch]
     fn fetch_and_execute(&mut self) -> Result<(), MemoryMapError> {
         let opcode: u8 = self.consume8()?;
+        let mut mnemonic: String = String::from("");
 
         #[bitmatch]
         match opcode {
             // HLT
             "01110110" => {
                 // 0x76
-                println!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
+                mnemonic = format!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
             }
 
             // MOV D,S   01DDDSSS          -       Move register to register
-            "01dddsss" => {}
+            "01dddsss" => {
+                let dst_id: RegId8 = REG_ID8_MAP[d as usize];
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_id);
+
+                // get the value of the src operand
+                let src_val: Reg8 = match src_id {
+                    // src operand stored in memory
+                    RegId8::M => {                        
+                        let addr: u16 = self.reg_hl.into();
+                        self.addr_space.read_b(addr)?
+                    },
+
+                    // src operand stored in register
+                    _ => self.get_reg8(src_id)
+                };
+
+                // set the value of the dst operand
+                match dst_id {
+                    // store dst operand in memory
+                    RegId8::M => {
+                        let addr: u16 = self.reg_hl.into();
+                        self.addr_space.write_b(addr, src_val)?;
+                    }
+
+                    // store dst operand in register
+                    _ => { self.set_reg8(dst_id, src_val); }
+                }
+            }
 
             // MVI D,#   00DDD110 db       -       Move immediate to register
             // LXI PP,#  00PP0001 lb hb    -       Load register pair immediate
@@ -158,10 +203,11 @@ where
             // NOP       00000000          -       No operation
             _ => {
                 // unimplemented_instruction!(opcode);
-                println!("{:#04x}\tUNIMPLEMENTED", opcode);
+                mnemonic = format!("{:#04x}\tUNIMPLEMENTED", opcode);
             }
         };
 
+        println!("{}", mnemonic);
         return Ok(());
     }
 }
