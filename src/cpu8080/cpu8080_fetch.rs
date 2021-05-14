@@ -215,7 +215,30 @@ where
             }
 
             // SHLD a    00100010 lb hb    -       Store H:L to memory
-            // LDAX PP   00PP1010 *1       -       Load indirect through BC or DE
+            "00100010" => {
+                let dst_addr: u16 = self.consume16()?;
+                let src_id: RegId16 = RegId16::HL;
+                mnemonic = format!("{:#04x}\tSHLD {}, {}", opcode, dst_addr, src_id);
+
+                let src_val = self.get_reg16(src_id);
+                self.addr_space.write_w(dst_addr, src_val)?;
+            }
+
+            // LDAX PP   00pp1010 *1       -       Load indirect through BC or DE
+            "00pp1010" => {
+                let dst_id = RegId8::A;
+                let src_id: RegId16 = REG_ID16_MAP[p as usize];
+                match src_id {
+                    RegId16::BC | RegId16::DE => {},
+                    _ => panic!("Invalid src operand ({})", src_id),
+                }
+                mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
+
+                let src_addr: u16 = self.get_reg16(src_id);
+                let src_val: u8 = self.addr_space.read_b(src_addr)?;
+                self.set_reg8(dst_id, src_val);
+            }
+
             // STAX PP   00PP0010 *1       -       Store indirect through BC or DE
             // XCHG      11101011          -       Exchange DE and HL content
             // ADD S     10000SSS          ZSPCA   Add register to A
