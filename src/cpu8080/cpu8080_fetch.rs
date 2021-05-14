@@ -463,7 +463,37 @@ where
             }
 
             // INX PP    00PP0011          -       Increment register pair
+            "00pp0011" => {
+                let dst_id: RegId16 = REG_ID16_MAP[p as usize];
+                mnemonic = format!("{:#04x}\tINX {}", opcode, dst_id);
+
+                let dst_val: u16 = self.get_reg16(dst_id);
+
+                let res: u16 = self.add_set_flags16(
+                    dst_val,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                self.set_reg16(dst_id, res);
+            }
+
             // DCX PP    00PP1011          -       Decrement register pair
+            "00pp1011" => {
+                let dst_id: RegId16 = REG_ID16_MAP[p as usize];
+                mnemonic = format!("{:#04x}\tDCX {}", opcode, dst_id);
+
+                let dst_val: u16 = self.get_reg16(dst_id);
+
+                let res: u16 = self.sub_set_flags16(
+                    dst_val,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                self.set_reg16(dst_id, res);
+            }
+
             // DAD PP    00PP1001          C       Add register pair to HL (16 bit add)
             // DAA       00100111          ZSPCA   Decimal Adjust accumulator
             // ANA S     10100SSS          ZSCPA   AND register with A
