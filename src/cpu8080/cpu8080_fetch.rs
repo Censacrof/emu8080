@@ -49,6 +49,17 @@ impl fmt::Display for RegId8 {
     }
 }
 
+impl fmt::Display for RegId16 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RegId16::BC => write!(f, "BC"),
+            RegId16::DE => write!(f, "DE"),
+            RegId16::HL => write!(f, "HL"),
+            RegId16::SP => write!(f, "SP"),
+        }
+    }
+}
+
 const REG_ID16_MAP: [RegId16; 4] = [RegId16::BC, RegId16::DE, RegId16::HL, RegId16::SP];
 
 impl<MemMapT> Cpu8080<MemMapT>
@@ -149,7 +160,7 @@ where
             "00ddd110" => {
                 let dst_id: RegId8 = REG_ID8_MAP[d as usize];
                 let src_val: u8 = self.consume8()?;
-                mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_val);
+                mnemonic = format!("{:#04x}\tMVI {}, {}", opcode, dst_id, src_val);
 
                 // set the value of the dst operand
                 match dst_id {
@@ -165,6 +176,14 @@ where
             }
 
             // LXI PP,#  00PP0001 lb hb    -       Load register pair immediate
+            "00pp0001" => {
+                let dst_id: RegId16 = REG_ID16_MAP[p as usize];
+                let src_val: u16 = self.consume16()?;
+                mnemonic = format!("{:#04x}\tLXI {}, {}", opcode, dst_id, src_val);
+
+                self.set_reg16(dst_id, src_val);
+            }
+
             // LDA a     00111010 lb hb    -       Load A from memory
             // STA a     00110010 lb hb    -       Store A to memory
             // LHLD a    00101010 lb hb    -       Load H:L from memory
