@@ -503,38 +503,180 @@ where
                 self.flags.cf = !self.flags.cf;
             }
 
+            // ------------------ MOV B, * ------------------
             // 0x40	MOV B,B	1		B <- B
+            0x40 => {
+                self.reg_bc.h = self.reg_bc.h;
+            }
+
             // 0x41	MOV B,C	1		B <- C
+            0x41 => {
+                self.reg_bc.h = self.reg_bc.l;
+            }
+
             // 0x42	MOV B,D	1		B <- D
+            0x42 => {
+                self.reg_bc.h = self.reg_de.h;
+            }
+
             // 0x43	MOV B,E	1		B <- E
+            0x43 => {
+                self.reg_bc.h = self.reg_de.l;
+            }
+
             // 0x44	MOV B,H	1		B <- H
+            0x44 => {
+                self.reg_bc.h = self.reg_hl.h;
+            }
+
             // 0x45	MOV B,L	1		B <- L
+            0x45 => {
+                self.reg_bc.h = self.reg_hl.l;
+            }
+
             // 0x46	MOV B,M	1		B <- (HL)
+            0x46 => {
+                let addr: u16 = self.reg_hl.into();
+                let b = self.addr_space.read_b(addr)?;
+                self.reg_bc.h = b;
+            }
+
             // 0x47	MOV B,A	1		B <- A
+            0x47 => {
+                self.reg_bc.h = self.reg_a;
+            }
+
+            // ------------------ MOV C, * ------------------
             // 0x48	MOV C,B	1		C <- B
+            0x48 => {
+                self.reg_bc.l = self.reg_bc.h;
+            }
+
             // 0x49	MOV C,C	1		C <- C
+            0x49 => {
+                self.reg_bc.l = self.reg_bc.l;
+            }
+
             // 0x4a	MOV C,D	1		C <- D
+            0x4a => {
+                self.reg_bc.l = self.reg_de.h;
+            }
+            
             // 0x4b	MOV C,E	1		C <- E
+            0x4b => {
+                self.reg_bc.l = self.reg_de.l;
+            }
+
             // 0x4c	MOV C,H	1		C <- H
+            0x4c => {
+                self.reg_bc.l = self.reg_hl.h;
+            }
+
             // 0x4d	MOV C,L	1		C <- L
+            0x4d => {
+                self.reg_bc.l = self.reg_hl.l;
+            }
+
             // 0x4e	MOV C,M	1		C <- (HL)
+            0x4e => {
+                let addr: u16 = self.reg_hl.into();
+                let b = self.addr_space.read_b(addr)?;
+                self.reg_bc.l = b;
+            }
+
             // 0x4f	MOV C,A	1		C <- A
+            0x4f => {
+                self.reg_bc.l = self.reg_a;
+            }
+
+            // ------------------ MOV D, * ------------------
             // 0x50	MOV D,B	1		D <- B
+            0x50 => {
+                self.reg_de.h = self.reg_bc.h;
+            }
+
             // 0x51	MOV D,C	1		D <- C
+            0x51 => {
+                self.reg_de.h = self.reg_bc.l;
+            }
+
             // 0x52	MOV D,D	1		D <- D
+            0x52 => {
+                self.reg_de.h = self.reg_de.h;
+            }
+
             // 0x53	MOV D,E	1		D <- E
+            0x53 => {
+                self.reg_de.h = self.reg_de.l;
+            }
+
             // 0x54	MOV D,H	1		D <- H
+            0x54 => {
+                self.reg_de.h = self.reg_hl.h;
+            }
+
             // 0x55	MOV D,L	1		D <- L
+            0x55 => {
+                self.reg_de.h = self.reg_hl.l;
+            }
+
             // 0x56	MOV D,M	1		D <- (HL)
+            0x56 => {
+                let addr: u16 = self.reg_hl.into();
+                let b = self.addr_space.read_b(addr)?;
+                self.reg_de.h = b;
+            }
+
             // 0x57	MOV D,A	1		D <- A
+            0x57 => {
+                self.reg_de.h = self.reg_a;
+            }
+
+            // ------------------ MOV E, * ------------------
             // 0x58	MOV E,B	1		E <- B
+            0x58 => {
+                self.reg_de.l = self.reg_bc.h;
+            }
+
             // 0x59	MOV E,C	1		E <- C
+            0x59 => {
+                self.reg_de.l = self.reg_bc.l;
+            }
+
             // 0x5a	MOV E,D	1		E <- D
+            0x5a => {
+                self.reg_de.l = self.reg_de.h;
+            }
+
             // 0x5b	MOV E,E	1		E <- E
+            0x5b => {
+                self.reg_de.l = self.reg_de.l;
+            }
+
             // 0x5c	MOV E,H	1		E <- H
+            0x5c => {
+                self.reg_de.l = self.reg_hl.h;
+            }
+
             // 0x5d	MOV E,L	1		E <- L
+            0x5d => {
+                self.reg_de.l = self.reg_hl.l;
+            }
+
             // 0x5e	MOV E,M	1		E <- (HL)
+            0x5e => {
+                let addr: u16 = self.reg_hl.into();
+                let b = self.addr_space.read_b(addr)?;
+                self.reg_de.l = b;
+            }
+
             // 0x5f	MOV E,A	1		E <- A
+            0x5f => {
+                self.reg_de.l = self.reg_a;
+            }
+
+
+
             // 0x60	MOV H,B	1		H <- B
             // 0x61	MOV H,C	1		H <- C
             // 0x62	MOV H,D	1		H <- D
