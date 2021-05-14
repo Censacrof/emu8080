@@ -269,6 +269,28 @@ where
             }
 
             // ADD S     10000SSS          ZSPCA   Add register to A
+            "10000sss" => {
+                let dst_id = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tADD {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id)
+                };
+                
+                let res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+
+                self.set_reg8(dst_id, res);
+            }
+
             // ADI #     11000110 db       ZSCPA   Add immediate to A
             // ADC S     10001SSS          ZSCPA   Add register to A with carry
             // ACI #     11001110 db       ZSCPA   Add immediate to A with carry
