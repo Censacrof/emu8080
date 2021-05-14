@@ -292,6 +292,20 @@ where
             }
 
             // ADI #     11000110 db       ZSCPA   Add immediate to A
+            "11000110" => {
+                let dst_id = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
+
+                let res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+
+                self.set_reg8(dst_id, res);
+            }
+
             // ADC S     10001SSS          ZSCPA   Add register to A with carry
             // ACI #     11001110 db       ZSCPA   Add immediate to A with carry
             // SUB S     10010SSS          ZSCPA   Subtract register from A
