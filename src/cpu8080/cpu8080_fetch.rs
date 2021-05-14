@@ -384,6 +384,28 @@ where
             }
 
             // SBB S     10011SSS          ZSCPA   Subtract register from A with borrow
+            "10011sss" => {
+                let dst_id = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tSBB {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id),
+                };
+
+                let res = self.sub_set_flags8(
+                    self.get_reg8(dst_id),
+                    u8::wrapping_sub(src_val, if self.flags.cf { 1 } else { 0 }),
+                    flag_mask::ALL_FLAGS
+                );
+
+                self.set_reg8(dst_id, res);
+            }
+
             // SBI #     11011110 db       ZSCPA   Subtract immediate from A with borrow
             // INR D     00DDD100          ZSPA    Increment register
             // DCR D     00DDD101          ZSPA    Decrement register
