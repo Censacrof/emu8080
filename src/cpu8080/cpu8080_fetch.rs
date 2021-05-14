@@ -313,19 +313,13 @@ where
                     _ => self.get_reg8(src_id),
                 };
 
-                let old_carry = self.flags.cf;
-                let mut res =
-                    self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
-                let carry = self.flags.cf;
-                let aux_carry = self.flags.af;
-
-                if old_carry {
-                    res = self.add_set_flags8(res, 1, flag_mask::ALL_FLAGS);
-                }
+                let res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    u8::wrapping_add(src_val, if self.flags.cf { 1 } else { 0 }),
+                    flag_mask::ALL_FLAGS,
+                );
 
                 self.set_reg8(dst_id, res);
-                self.flags.cf |= carry;
-                self.flags.af |= aux_carry;
             }
 
             // ACI #     11001110 db       ZSCPA   Add immediate to A with carry
@@ -334,19 +328,13 @@ where
                 let src_val: u8 = self.consume8()?;
                 mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
 
-                let old_carry = self.flags.cf;
-                let mut res =
-                    self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
-                let carry = self.flags.cf;
-                let aux_carry = self.flags.af;
-
-                if old_carry {
-                    res = self.add_set_flags8(res, 1, flag_mask::ALL_FLAGS);
-                }
+                let res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    u8::wrapping_add(src_val, if self.flags.cf { 1 } else { 0 }),
+                    flag_mask::ALL_FLAGS,
+                );
 
                 self.set_reg8(dst_id, res);
-                self.flags.cf |= carry;
-                self.flags.af |= aux_carry;
             }
 
             // SUB S     10010SSS          ZSCPA   Subtract register from A
@@ -374,11 +362,8 @@ where
                 let src_val: u8 = self.consume8()?;
                 mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
 
-                let res: u8 = self.sub_set_flags8(
-                    self.get_reg8(dst_id),
-                    src_val,
-                    flag_mask::ALL_FLAGS
-                );
+                let res: u8 =
+                    self.sub_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                 self.set_reg8(dst_id, res);
             }
@@ -400,7 +385,7 @@ where
                 let res = self.sub_set_flags8(
                     self.get_reg8(dst_id),
                     u8::wrapping_sub(src_val, if self.flags.cf { 1 } else { 0 }),
-                    flag_mask::ALL_FLAGS
+                    flag_mask::ALL_FLAGS,
                 );
 
                 self.set_reg8(dst_id, res);
