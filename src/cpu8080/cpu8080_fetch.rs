@@ -392,6 +392,20 @@ where
             }
 
             // SBI #     11011110 db       ZSCPA   Subtract immediate from A with borrow
+            "11011110" => {
+                let dst_id = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tSBB {}, ${}", opcode, dst_id, src_val);
+
+                let res = self.sub_set_flags8(
+                    self.get_reg8(dst_id),
+                    u8::wrapping_sub(src_val, if self.flags.cf { 1 } else { 0 }),
+                    flag_mask::ALL_FLAGS,
+                );
+
+                self.set_reg8(dst_id, res);
+            }
+
             // INR D     00DDD100          ZSPA    Increment register
             // DCR D     00DDD101          ZSPA    Decrement register
             // INX PP    00PP0011          -       Increment register pair
