@@ -134,13 +134,13 @@ where
                 // get the value of the src operand
                 let src_val: Reg8 = match src_id {
                     // src operand stored in memory
-                    RegId8::M => {                        
+                    RegId8::M => {
                         let addr: u16 = self.reg_hl.into();
                         self.addr_space.read_b(addr)?
-                    },
+                    }
 
                     // src operand stored in register
-                    _ => self.get_reg8(src_id)
+                    _ => self.get_reg8(src_id),
                 };
 
                 // set the value of the dst operand
@@ -152,7 +152,9 @@ where
                     }
 
                     // store dst operand in register
-                    _ => { self.set_reg8(dst_id, src_val); }
+                    _ => {
+                        self.set_reg8(dst_id, src_val);
+                    }
                 }
             }
 
@@ -168,10 +170,12 @@ where
                     RegId8::M => {
                         let addr: u16 = self.reg_hl.into();
                         self.addr_space.write_b(addr, src_val)?;
-                    },
+                    }
 
                     // store dst operand in register
-                    _ => { self.set_reg8(dst_id, src_val); }
+                    _ => {
+                        self.set_reg8(dst_id, src_val);
+                    }
                 }
             }
 
@@ -206,7 +210,7 @@ where
 
             // LHLD a    00101010 lb hb    -       Load H:L from memory
             "00101010" => {
-                let dst_id : RegId16 = RegId16::HL;
+                let dst_id: RegId16 = RegId16::HL;
                 let src_addr: u16 = self.consume16()?;
                 mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
 
@@ -229,7 +233,7 @@ where
                 let dst_id = RegId8::A;
                 let src_id: RegId16 = REG_ID16_MAP[p as usize];
                 match src_id {
-                    RegId16::BC | RegId16::DE => {},
+                    RegId16::BC | RegId16::DE => {}
                     _ => panic!("Invalid src operand ({})", src_id),
                 }
                 mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
@@ -244,7 +248,7 @@ where
                 let dst_id: RegId16 = REG_ID16_MAP[p as usize];
                 let src_id = RegId8::A;
                 match dst_id {
-                    RegId16::BC | RegId16::DE => {},
+                    RegId16::BC | RegId16::DE => {}
                     _ => panic!("Invalid src operand ({})", src_id),
                 }
                 mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
@@ -253,7 +257,7 @@ where
                 let src_val: u8 = self.get_reg8(src_id);
                 self.addr_space.write_b(dst_addr, src_val)?;
             }
-            
+
             // XCHG      11101011          -       Exchange DE and HL content
             "11101011" => {
                 let dst_id = RegId16::DE;
@@ -261,10 +265,7 @@ where
                 mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
 
                 let swap: u16 = self.get_reg16(dst_id);
-                self.set_reg16(
-                    dst_id,
-                    self.get_reg16(src_id)
-                );
+                self.set_reg16(dst_id, self.get_reg16(src_id));
                 self.set_reg16(src_id, swap);
             }
 
@@ -279,14 +280,10 @@ where
                         let src_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.read_b(src_addr)?
                     }
-                    _ => self.get_reg8(src_id)
+                    _ => self.get_reg8(src_id),
                 };
-                
-                let res = self.add_set_flags8(
-                    self.get_reg8(dst_id),
-                    src_val,
-                    flag_mask::ALL_FLAGS
-                );
+
+                let res = self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                 self.set_reg8(dst_id, res);
             }
@@ -297,11 +294,7 @@ where
                 let src_val: u8 = self.consume8()?;
                 mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
 
-                let res = self.add_set_flags8(
-                    self.get_reg8(dst_id),
-                    src_val,
-                    flag_mask::ALL_FLAGS
-                );
+                let res = self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                 self.set_reg8(dst_id, res);
             }
@@ -316,25 +309,18 @@ where
                     RegId8::M => {
                         let src_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.read_b(src_addr)?
-                    },
-                    _ => self.get_reg8(src_id)
+                    }
+                    _ => self.get_reg8(src_id),
                 };
 
                 let old_carry = self.flags.cf;
-                let mut res = self.add_set_flags8(
-                    self.get_reg8(dst_id),
-                    src_val,
-                    flag_mask::ALL_FLAGS
-                );
+                let mut res =
+                    self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
                 let carry = self.flags.cf;
                 let aux_carry = self.flags.af;
 
                 if old_carry {
-                    res = self.add_set_flags8(
-                        res,
-                        1,
-                        flag_mask::ALL_FLAGS
-                    );
+                    res = self.add_set_flags8(res, 1, flag_mask::ALL_FLAGS);
                 }
 
                 self.set_reg8(dst_id, res);
@@ -349,20 +335,13 @@ where
                 mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
 
                 let old_carry = self.flags.cf;
-                let mut res = self.add_set_flags8(
-                    self.get_reg8(dst_id),
-                    src_val,
-                    flag_mask::ALL_FLAGS
-                );
+                let mut res =
+                    self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
                 let carry = self.flags.cf;
                 let aux_carry = self.flags.af;
 
                 if old_carry {
-                    res = self.add_set_flags8(
-                        res,
-                        1,
-                        flag_mask::ALL_FLAGS
-                    );
+                    res = self.add_set_flags8(res, 1, flag_mask::ALL_FLAGS);
                 }
 
                 self.set_reg8(dst_id, res);
@@ -371,6 +350,24 @@ where
             }
 
             // SUB S     10010SSS          ZSCPA   Subtract register from A
+            "10010sss" => {
+                let dst_id = RegId8::A;
+                let src_id = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tSUB {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id),
+                };
+
+                let res = self.sub_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
+
+                self.set_reg8(dst_id, res);
+            }
+
             // SUI #     11010110 db       ZSCPA   Subtract immediate from A
             // SBB S     10011SSS          ZSCPA   Subtract register from A with borrow
             // SBI #     11011110 db       ZSCPA   Subtract immediate from A with borrow
