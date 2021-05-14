@@ -369,6 +369,20 @@ where
             }
 
             // SUI #     11010110 db       ZSCPA   Subtract immediate from A
+            "11010110" => {
+                let dst_id = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
+
+                let res: u8 = self.sub_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+
+                self.set_reg8(dst_id, res);
+            }
+
             // SBB S     10011SSS          ZSCPA   Subtract register from A with borrow
             // SBI #     11011110 db       ZSCPA   Subtract immediate from A with borrow
             // INR D     00DDD100          ZSPA    Increment register
