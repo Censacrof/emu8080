@@ -381,22 +381,128 @@ where
             }
 
             // 0x30	INVALID OPCODE
-            
+
             // 0x31	LXI SP, D16	3		SP.hi <- byte 3, SP.lo <- byte 2
+            0x31 => {
+                self.reg_sp = self.consume16()?;
+            }
+
             // 0x32	STA adr	3		(adr) <- A
+            0x32 => {
+                let addr = self.consume16()?;
+                self.addr_space.write_b(addr, self.reg_a)?;
+            }
+
             // 0x33	INX SP	1		SP = SP + 1
+            0x33 => {
+                self.reg_sp = self.add_set_flags16(
+                    self.reg_sp,
+                    1,
+                    flag_mask::NO_FLAGS
+                );
+            }
+
             // 0x34	INR M	1	Z, S, P, AC	(HL) <- (HL)+1
+            0x34 => {
+                let addr: u16 = self.reg_hl.into();
+                let b: u8 = self.addr_space.read_b(addr)?;
+                
+                let res = self.add_set_flags8(
+                    b,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                self.addr_space.write_b(
+                    addr,
+                    res
+                )?;
+            }
+
             // 0x35	DCR M	1	Z, S, P, AC	(HL) <- (HL)-1
+            0x35 => {
+                let addr: u16 = self.reg_hl.into();
+                let b: u8 = self.addr_space.read_b(addr)?;
+                
+                let res = self.sub_set_flags8(
+                    b,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                );
+
+                self.addr_space.write_b(
+                    addr,
+                    res
+                )?;
+            }
+
             // 0x36	MVI M,D8	2		(HL) <- byte 2
+            0x36 => {
+                let addr: u16 = self.reg_hl.into();
+                let b: u8 = self.consume8()?;
+                self.addr_space.write_b(addr, b)?;
+            }
+
             // 0x37	STC	1	CY	CY = 1
-            // 0x38	-
+            0x37 => {
+                self.flags.cf = true;
+            }
+
+            // 0x38	INVALID OPCODE
+
             // 0x39	DAD SP	1	CY	HL = HL + SP
+            0x39 => {
+                self.reg_hl = self.add_set_flags16(
+                    self.reg_hl.into(),
+                    self.reg_sp,
+                    flag_mask::CF
+                ).into();
+            }
+
             // 0x3a	LDA adr	3		A <- (adr)
+            0x3a => {
+                let addr: u16 = self.consume16()?;
+                let b: u8 = self.addr_space.read_b(addr)?;
+                self.reg_a = b;
+            }
+
             // 0x3b	DCX SP	1		SP = SP-1
+            0x3b => {
+                self.reg_sp = self.sub_set_flags16(
+                    self.reg_sp.into(),
+                    1,
+                    flag_mask::NO_FLAGS
+                ).into();
+            }
+
             // 0x3c	INR A	1	Z, S, P, AC	A <- A+1
+            0x3c => {
+                self.reg_a = self.add_set_flags8(
+                    self.reg_a,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                )
+            }
+
             // 0x3d	DCR A	1	Z, S, P, AC	A <- A-1
+            0x3d => {
+                self.reg_a = self.sub_set_flags8(
+                    self.reg_a,
+                    1,
+                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                )
+            }
+
             // 0x3e	MVI A,D8	2		A <- byte 2
+            0x3e => {
+                self.reg_a = self.consume8()?;
+            }
+
             // 0x3f	CMC	1	CY	CY=!CY
+            0x3f => {
+                self.flags.cf = !self.flags.cf;
+            }
+
             // 0x40	MOV B,B	1		B <- B
             // 0x41	MOV B,C	1		B <- C
             // 0x42	MOV B,D	1		B <- D
