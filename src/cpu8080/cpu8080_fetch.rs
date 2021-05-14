@@ -307,7 +307,69 @@ where
             }
 
             // ADC S     10001SSS          ZSCPA   Add register to A with carry
+            "10001sss" => {
+                let dst_id = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tADC {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    },
+                    _ => self.get_reg8(src_id)
+                };
+
+                let old_carry = self.flags.cf;
+                let mut res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+                let carry = self.flags.cf;
+                let aux_carry = self.flags.af;
+
+                if old_carry {
+                    res = self.add_set_flags8(
+                        res,
+                        1,
+                        flag_mask::ALL_FLAGS
+                    );
+                }
+
+                self.set_reg8(dst_id, res);
+                self.flags.cf |= carry;
+                self.flags.af |= aux_carry;
+            }
+
             // ACI #     11001110 db       ZSCPA   Add immediate to A with carry
+            "11001110" => {
+                let dst_id = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
+
+                let old_carry = self.flags.cf;
+                let mut res = self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+                let carry = self.flags.cf;
+                let aux_carry = self.flags.af;
+
+                if old_carry {
+                    res = self.add_set_flags8(
+                        res,
+                        1,
+                        flag_mask::ALL_FLAGS
+                    );
+                }
+
+                self.set_reg8(dst_id, res);
+                self.flags.cf |= carry;
+                self.flags.af |= aux_carry;
+            }
+
             // SUB S     10010SSS          ZSCPA   Subtract register from A
             // SUI #     11010110 db       ZSCPA   Subtract immediate from A
             // SBB S     10011SSS          ZSCPA   Subtract register from A with borrow
