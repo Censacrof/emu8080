@@ -71,6 +71,9 @@ impl error::Error for MemoryMapError {}
 trait MemoryMap {
     fn read_b(&self, addr: u16) -> Result<u8, MemoryMapError>;
     fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError>;
+
+    fn read_w(&self, addr: u16) -> Result<u16, MemoryMapError>;
+    fn write_w(&mut self, addr: u16, b: u16) -> Result<(), MemoryMapError>;
 }
 
 struct Cpu8080<MemMapT>
@@ -260,6 +263,19 @@ mod tests {
 
         fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError> {
             self.buff[addr as usize] = b;
+            return Ok(());
+        }
+
+        fn read_w(&self, addr: u16) -> Result<u16, MemoryMapError> {
+            let addr_i = addr as usize;
+            let w: u16 = (self.buff[addr_i] as u16) + ((self.buff[addr_i + 1] as u16) << 8);
+            return Ok(w);
+        }
+
+        fn write_w(&mut self, addr: u16, w: u16) -> Result<(), MemoryMapError> {
+            let addr_i = addr as usize;
+            self.buff[addr_i] = (w & 0x00ff) as u8;
+            self.buff[addr_i + 1] = ((w & 0xff00) >> 8) as u8;
             return Ok(());
         }
     }
