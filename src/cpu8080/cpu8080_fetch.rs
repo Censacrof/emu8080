@@ -160,7 +160,7 @@ where
             "00ddd110" => {
                 let dst_id: RegId8 = REG_ID8_MAP[d as usize];
                 let src_val: u8 = self.consume8()?;
-                mnemonic = format!("{:#04x}\tMVI {}, {}", opcode, dst_id, src_val);
+                mnemonic = format!("{:#04x}\tMVI {}, ${}", opcode, dst_id, src_val);
 
                 // set the value of the dst operand
                 match dst_id {
@@ -179,13 +179,31 @@ where
             "00pp0001" => {
                 let dst_id: RegId16 = REG_ID16_MAP[p as usize];
                 let src_val: u16 = self.consume16()?;
-                mnemonic = format!("{:#04x}\tLXI {}, {}", opcode, dst_id, src_val);
+                mnemonic = format!("{:#04x}\tLXI {}, ${}", opcode, dst_id, src_val);
 
                 self.set_reg16(dst_id, src_val);
             }
 
             // LDA a     00111010 lb hb    -       Load A from memory
+            "00111010" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_addr: u16 = self.consume16()?;
+                mnemonic = format!("{:#04x}\tLDA {}, {}", opcode, dst_id, src_addr);
+
+                let src_val: u8 = self.addr_space.read_b(src_addr)?;
+                self.set_reg8(dst_id, src_val);
+            }
+
             // STA a     00110010 lb hb    -       Store A to memory
+            "00110010" => {
+                let dst_addr: u16 = self.consume16()?;
+                let src_id: RegId8 = RegId8::A;
+                mnemonic = format!("{:#04x}\tSTA {}, {}", opcode, dst_addr, src_id);
+
+                let src_val = self.get_reg8(src_id);
+                self.addr_space.write_b(dst_addr, src_val)?;
+            }
+
             // LHLD a    00101010 lb hb    -       Load H:L from memory
             // SHLD a    00100010 lb hb    -       Store H:L to memory
             // LDAX PP   00PP1010 *1       -       Load indirect through BC or DE
