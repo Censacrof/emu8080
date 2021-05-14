@@ -167,7 +167,7 @@ where
             }
             self.flags.pf = mod2sum == 0;
         }
-        
+
         let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
             self.flags.cf = (res16 & 0xff00u16 != 0) ^ is_sub;
@@ -203,7 +203,7 @@ where
             }
             self.flags.pf = mod2sum == 0;
         }
-        
+
         let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
             self.flags.cf = (res32 & 0xffff0000u32 != 0) ^ is_sub;
@@ -219,12 +219,12 @@ where
     }
 
     fn sub_set_flags8(&mut self, dst: u8, src: u8, affected_flags: u8) -> u8 {
-        let compl_src: u8 = !src + 1u8;
+        let compl_src: u8 = u8::wrapping_add(!src, 1u8);
         return self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
     }
 
     fn sub_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
-        let compl_src: u16 = !src + 1u16;
+        let compl_src: u16 = u16::wrapping_add(!src, 1u16);
         return self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
     }
 }
@@ -251,8 +251,8 @@ mod tests {
         assert_eq!(val, 0x8001u16);
     }
 
-    struct TestMemory {
-        buff: [u8; 65536],
+    pub struct TestMemory {
+        pub buff: [u8; 65536],
     }
 
     impl MemoryMap for TestMemory {
@@ -336,25 +336,61 @@ mod tests {
         let a = 0xffu8;
         let b = 0x01u8;
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x00u8);
-        assert_eq!(cpu.flags, FlagReg { zf: true, sf: false, pf: true, cf: true, af: true });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: true,
+                sf: false,
+                pf: true,
+                cf: true,
+                af: true
+            }
+        );
 
         // ------------
         let a = 0x8fu8;
         let b = 0x01u8;
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x90u8);
-        assert_eq!(cpu.flags, FlagReg { zf: false, sf: true, pf: true, cf: false, af: true });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: false,
+                sf: true,
+                pf: true,
+                cf: false,
+                af: true
+            }
+        );
 
         // ------------
         let a = 0x05u8;
         let b = 0x03u8;
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} + {:#04x} = {:#04x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x08u8);
-        assert_eq!(cpu.flags, FlagReg { zf: false, sf: false, pf: false, cf: false, af: false });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: false,
+                sf: false,
+                pf: false,
+                cf: false,
+                af: false
+            }
+        );
     }
 
     #[test]
@@ -365,25 +401,61 @@ mod tests {
         let a = 0xffffu16;
         let b = 0x0001u16;
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x0000u16);
-        assert_eq!(cpu.flags, FlagReg { zf: true, sf: false, pf: true, cf: true, af: true });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: true,
+                sf: false,
+                pf: true,
+                cf: true,
+                af: true
+            }
+        );
 
         // ---------------
         let a = 0x80ffu16;
         let b = 0x0001u16;
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x8100u16);
-        assert_eq!(cpu.flags, FlagReg { zf: false, sf: true, pf: true, cf: false, af: true });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: false,
+                sf: true,
+                pf: true,
+                cf: false,
+                af: true
+            }
+        );
 
         // ---------------
         let a = 0x0005u16;
         let b = 0x0003u16;
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#06x} + {:#06x} = {:#06x}; flags: {:?}", a, b, res, cpu.flags);
+        println!(
+            "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
+            a, b, res, cpu.flags
+        );
         assert_eq!(res, 0x08u16);
-        assert_eq!(cpu.flags, FlagReg { zf: false, sf: false, pf: false, cf: false, af: false });
+        assert_eq!(
+            cpu.flags,
+            FlagReg {
+                zf: false,
+                sf: false,
+                pf: false,
+                cf: false,
+                af: false
+            }
+        );
     }
 
     #[test]
@@ -394,7 +466,10 @@ mod tests {
         let a = 0x80u8;
         let b = 0x01u8;
         let res = cpu.sub_set_flags8(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        println!(
+            "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
+            a, b, res, cpu.flags.cf
+        );
         assert_eq!(res, 0x7fu8);
         assert_eq!(cpu.flags.cf, false);
 
@@ -402,7 +477,10 @@ mod tests {
         let a = 0x07u8;
         let b = 0xb5u8;
         let res = cpu.sub_set_flags8(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        println!(
+            "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
+            a, b, res, cpu.flags.cf
+        );
         assert_eq!(res, 0x52u8);
         assert_eq!(cpu.flags.cf, true);
     }
@@ -415,7 +493,10 @@ mod tests {
         let a = 0x0080u16;
         let b = 0x0001u16;
         let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#06x} - {:#06x} = {:#06x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        println!(
+            "{:#06x} - {:#06x} = {:#06x}; borrow_out (CF): {}",
+            a, b, res, cpu.flags.cf
+        );
         assert_eq!(res, 0x007fu16);
         assert_eq!(cpu.flags.cf, false);
 
@@ -423,7 +504,10 @@ mod tests {
         let a = 0x0007u16;
         let b = 0x00b5u16;
         let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
-        println!("{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}", a, b, res, cpu.flags.cf);
+        println!(
+            "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
+            a, b, res, cpu.flags.cf
+        );
         assert_eq!(res, 0xff52u16);
         assert_eq!(cpu.flags.cf, true);
     }
