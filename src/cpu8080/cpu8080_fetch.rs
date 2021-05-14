@@ -205,6 +205,15 @@ where
             }
 
             // LHLD a    00101010 lb hb    -       Load H:L from memory
+            "00101010" => {
+                let dst_id : RegId16 = RegId16::HL;
+                let src_addr: u16 = self.consume16()?;
+                mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
+
+                let src_val: u16 = self.addr_space.read_w(src_addr)?;
+                self.set_reg16(dst_id, src_val);
+            }
+
             // SHLD a    00100010 lb hb    -       Store H:L to memory
             // LDAX PP   00PP1010 *1       -       Load indirect through BC or DE
             // STAX PP   00PP0010 *1       -       Store indirect through BC or DE
