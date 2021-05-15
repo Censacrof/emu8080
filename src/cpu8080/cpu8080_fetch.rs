@@ -1179,7 +1179,7 @@ where
                         break;
                     }
 
-                    let dst_val = self.io_space.in_port(src_val, self.state);
+                    let dst_val = self.io_space.in_port(src_val);
                     self.state.reg_a = dst_val;
                 }
 
@@ -1192,7 +1192,7 @@ where
                     }
 
                     let dst_val = self.state.reg_a;
-                    self.io_space.out_port(src_val, dst_val, self.state);
+                    self.io_space.out_port(src_val, dst_val);
                 }
 
                 // EI        11111011          -       Enable interrupts
@@ -1260,24 +1260,23 @@ mod tests {
 
     struct CpudiagIOBus {}
     impl IOBus for CpudiagIOBus {
-        fn in_port(&mut self, port: u8, state: Cpu8080State) -> u8 {
+        fn in_port(&mut self, port: u8) -> u8 {
             return 0;
         }
 
-        fn out_port(&mut self, port: u8, data: u8, state: Cpu8080State) {
-            match port {
-                // char output
-                0x02 => {
-                    println!("{}", data as char);
-                }
-                _ => {}
-            }
+        fn out_port(&mut self, port: u8, data: u8) {
+            
         }
     }
 
     #[test]
     fn test_cpudiag_full() {
         let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
+
+        // add the bios
+        cpu.addr_space.buff[0x0005] = 0xd3; // OUT
+        cpu.addr_space.buff[0x0006] = 0x02; // 2
+        cpu.addr_space.buff[0x0007] = 0xc9; // RET
 
         // add the program
         const FIRST_ADDR: usize = 0x0100;

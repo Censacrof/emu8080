@@ -125,8 +125,8 @@ struct Cpu8080State {
 }
 
 trait IOBus {
-    fn in_port(&mut self, port: u8, state: Cpu8080State) -> u8;
-    fn out_port(&mut self, port: u8, data: u8, state: Cpu8080State);
+    fn in_port(&mut self, port: u8) -> u8;
+    fn out_port(&mut self, port: u8, data: u8);
 }
 
 struct Cpu8080<MemMapT, IOBusT>
@@ -320,10 +320,10 @@ mod tests {
 
     pub struct TestIOBus {}
     impl IOBus for TestIOBus {
-        fn in_port(&mut self, port: u8, state: Cpu8080State) -> u8 {
+        fn in_port(&mut self, port: u8) -> u8 {
             return 0;
         }
-        fn out_port(&mut self, port: u8, data: u8, state: Cpu8080State) {}
+        fn out_port(&mut self, port: u8, data: u8) {}
     }
 
     #[test]
