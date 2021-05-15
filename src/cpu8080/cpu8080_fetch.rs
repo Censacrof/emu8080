@@ -773,8 +773,28 @@ where
             }
 
             // CMA       00101111          -       Compliment A
+            "00101111" => {
+                let dst_id: RegId8 = RegId8::A;
+                mnemonic = format!("{:#04x}\tCMA {}", opcode, dst_id);
+
+                let dst_val: u8 = self.get_reg8(dst_id);
+                self.set_reg8(dst_id, !dst_val);
+            }
+
             // CMC       00111111          C       Compliment Carry flag
+            "00111111" => {
+                mnemonic = format!("{:#04x}\tCMC", opcode);
+
+                self.flags.cf = !self.flags.cf;
+            }
+
             // STC       00110111          C       Set Carry flag
+            "00110111" => {
+                mnemonic = format!("{:#04x}\tSTC", opcode);
+
+                self.flags.cf = true;
+            }
+
             // JMP a     11000011 lb hb    -       Unconditional jump
             // Jccc a    11CCC010 lb hb    -       Conditional jump
             // CALL a    11001101 lb hb    -       Unconditional subroutine call
