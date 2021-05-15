@@ -1096,25 +1096,54 @@ where
                 // PUSH PP   11PP0101 *2       -       Push register pair on the stack
                 "11pp0101" => {
                     let src_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_id);
+                    let src_mne: String = match src_id {
+                        RegId16::SP => "PSW".into(),
+                        _ => format!("{}", src_id)
+                    };
+
+                    mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
                     if !execute {
                         break;
                     }
 
-                    let src_val: u16 = self.get_reg16(src_id);
+                    let src_val: u16 = match src_id {
+                        RegId16::SP => {
+                            let psw_l: u8 = self.flags.into();
+                            let psw_h: u8 = self.get_reg8(RegId8::A);
+                            let psw: u16 = (psw_l as u16) + ((psw_h as u16) << 8);
+                            psw
+                        },
+                        _ => self.get_reg16(src_id),
+                    };                    
+                    
                     self.push16(src_val)?;
                 }
 
                 // POP PP    11PP0001 *2       *2      Pop  register pair from the stack
                 "11pp0001" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_id);
+                    let dst_mne: String = match dst_id {
+                        RegId16::SP => "PSW".into(),
+                        _ => format!("{}", dst_id),
+                    };
+
+                    mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_mne);
                     if !execute {
                         break;
                     }
 
                     let w: u16 = self.pop16()?;
-                    self.set_reg16(dst_id, w);
+                    match dst_id {
+                        RegId16::SP => {
+                            self.flags = ((w & 0x00ff) as u8).into();
+                            self.set_reg8(
+                                RegId8::A,
+                                (w >> 8) as u8
+                            );
+                        },
+                        _ => { self.set_reg16(dst_id, w) },
+                    };
+                    
                 }
 
                 // XTHL      11100011          -       Swap H:L with top word on stack
@@ -1229,15 +1258,82 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
+    const CPU_DIAG_ROM: [u8; 12] = [
+        0x00, // 0  NOP
+        0x00, // 1  NOP
+        0x00, // 2  NOP
+        0x00, // 3  NOP
+        0x00, // 4  NOP
+        0x21, // 5  LXI H, 0x000a
+        0x0a, // 6  dl
+        0x00, // 7  dh
+        0x71, // 8  MOV M, C        ; use C content as the immediate port parameter of the next OUT instruction
+        0xd3, // 9  OUT
+        0x00, // 10 port
+        0xc9, // 11 RET
+    ];
+
+    struct CpudiagIOBus {}
+    impl IOBus for CpudiagIOBus {
+        fn in_port(&mut self, port: u8) -> u8 {
+            return 0;
+        }
+
+        fn out_port(&mut self, port: u8, data: u8) {
+            match port {
+                // char output
+                0x02 => {
+                    println!("{}", data as char);
+                }
+
+                // $-terminated string
+                0x09 => {}
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn test_cpudiag_io_bus() {
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
+
+        // add the rom part to the addr_space
+        for i in 0..CPU_DIAG_ROM.len() {
+            cpu.addr_space.buff[i] = CPU_DIAG_ROM[i];
+        }
+
+        // init the cpu
+        cpu.reg_sp = 0xffff;
+        cpu.push16(0x0100).unwrap();
+        cpu.reg_pc = 0x0005;
+
+        // 
+        cpu.reg_bc.l = 2; 
+        cpu.reg_a = 'F' as u8;
+
+        loop {
+            let curr_pc = cpu.reg_pc;
+            let mne: String = cpu.fetch_and_execute(true).unwrap();
+            println!("{:#06x}|\t{}", curr_pc, mne);
+
+            if curr_pc > CPU_DIAG_ROM.len() as u16 {
+                break;
+            }
+        }
+    }
+
     #[test]
     fn test_cpudiag() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
 
         const FIRST_ADDR: usize = 0x0100;
         for i in 0..CPUDIAG_BIN.len() {
             cpu.addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
         }
-        
+
+        // BDOS system call routine at addres 0x0005
+
         cpu.reg_pc = FIRST_ADDR as u16;
         for i in 0..32 {
             let curr_pc = cpu.reg_pc;

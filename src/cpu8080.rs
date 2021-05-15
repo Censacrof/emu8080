@@ -20,6 +20,32 @@ impl FlagReg {
     }
 }
 
+impl From<FlagReg> for Reg8 {
+    fn from(item: FlagReg) -> Self {
+        let mut res: Self = 0x02;
+
+        if item.cf { res |= flag_mask::CF }
+        if item.pf { res |= flag_mask::PF }
+        if item.af { res |= flag_mask::AF }
+        if item.zf { res |= flag_mask::ZF }
+        if item.sf { res |= flag_mask::SF }
+
+        return res;
+    }
+}
+
+impl From<Reg8> for FlagReg {
+    fn from(item: Reg8) -> Self {
+        return FlagReg {
+            cf: item & flag_mask::CF != 0,
+            pf: item & flag_mask::PF != 0,
+            af: item & flag_mask::AF != 0,
+            zf: item & flag_mask::ZF != 0,
+            sf: item & flag_mask::SF != 0,
+        };
+    }
+}
+
 #[derive(Copy, Clone, Default)]
 struct Reg8Pair {
     h: Reg8,
@@ -113,15 +139,15 @@ where
 }
 
 mod flag_mask {
-    pub const ZF: u8 = 0x01u8;
-    pub const SF: u8 = 0x02u8;
-    pub const PF: u8 = 0x04u8;
-    pub const CF: u8 = 0x08u8;
-    pub const AF: u8 = 0x10u8;
+    pub const CF: u8 = 1;
+    pub const PF: u8 = 4;
+    pub const AF: u8 = 16;
+    pub const ZF: u8 = 64;
+    pub const SF: u8 = 128;    
 
-    pub const IS_SUB: u8 = 0x20u8;
+    pub const IS_SUB: u8 = 32;
     pub const ALL_FLAGS: u8 = 0xff & !IS_SUB;
-    pub const NO_FLAGS: u8 = 0u8;
+    pub const NO_FLAGS: u8 = 0;
 }
 
 impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
@@ -296,7 +322,9 @@ mod tests {
 
     pub struct TestIOBus {}
     impl IOBus for TestIOBus {
-        fn in_port(&mut self, port: u8) -> u8 { return 0; }
+        fn in_port(&mut self, port: u8) -> u8 {
+            return 0;
+        }
         fn out_port(&mut self, port: u8, data: u8) {}
     }
 
