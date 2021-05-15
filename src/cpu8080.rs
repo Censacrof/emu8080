@@ -76,9 +76,15 @@ trait MemoryMap {
     fn write_w(&mut self, addr: u16, b: u16) -> Result<(), MemoryMapError>;
 }
 
-struct Cpu8080<MemMapT>
+trait IOBus {
+    fn in_port(&mut self, port: u8) -> u8;
+    fn out_port(&mut self, port: u8, data: u8);
+}
+
+struct Cpu8080<MemMapT, IOBusT>
 where
     MemMapT: MemoryMap,
+    IOBusT: IOBus,
 {
     // accumulator
     reg_a: Reg8,
@@ -100,6 +106,9 @@ where
     // addressable space (16 bit address)
     addr_space: MemMapT,
 
+    // I/O space (8 bit address)
+    io_space: IOBusT,
+
     interrutpions_enabled: bool,
 }
 
@@ -115,11 +124,12 @@ mod flag_mask {
     pub const NO_FLAGS: u8 = 0u8;
 }
 
-impl<MemMapT> Cpu8080<MemMapT>
+impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
 where
     MemMapT: MemoryMap,
+    IOBusT: IOBus,
 {
-    pub fn new(mem_map: MemMapT) -> Self {
+    pub fn new(mem_map: MemMapT, io_bus: IOBusT) -> Self {
         return Self {
             reg_a: 0,
             reg_bc: 0.into(),
@@ -129,6 +139,7 @@ where
             reg_sp: 0,
             flags: FlagReg::new(),
             addr_space: mem_map,
+            io_space: io_bus,
             interrutpions_enabled: false,
         };
     }
@@ -283,6 +294,12 @@ mod tests {
         }
     }
 
+    pub struct TestIOBus {}
+    impl IOBus for TestIOBus {
+        fn in_port(&mut self, port: u8) -> u8 { return 0; }
+        fn out_port(&mut self, port: u8, data: u8) {}
+    }
+
     #[test]
     fn test_memory_map() {
         const addr: u16 = 42u16;
@@ -302,7 +319,7 @@ mod tests {
             mem.buff[i as usize] = i as u8;
         }
 
-        let mut cpu = Cpu8080::new(mem);
+        let mut cpu = Cpu8080::new(mem, TestIOBus {});
         cpu.reg_pc = 0;
 
         for i in 0..N_IT {
@@ -324,7 +341,7 @@ mod tests {
         mem.buff[0] = BL;
         mem.buff[1] = BH;
 
-        let mut cpu = Cpu8080::new(mem);
+        let mut cpu = Cpu8080::new(mem, TestIOBus {});
         cpu.reg_pc = 0;
 
         assert_eq!(cpu.consume16().unwrap(), W);
@@ -333,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_cpu_add_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0xffu8;
@@ -398,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_cpu_add_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ---------------
         let a = 0xffffu16;
@@ -463,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0x80u8;
@@ -490,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0x0080u16;

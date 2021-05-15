@@ -106,9 +106,10 @@ impl fmt::Display for CondId {
     }
 }
 
-impl<MemMapT> Cpu8080<MemMapT>
+impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
 where
     MemMapT: MemoryMap,
+    IOBusT: IOBus,
 {
     #[allow(dead_code)]
     fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
@@ -1143,18 +1144,26 @@ where
 
                 // IN p      11011011 pa       -       Read input port into A
                 "11011011" => {
-                    mnemonic = format!("{:#04x}\tIN\tUNIMPLEMENTED", opcode);
+                    let src_val: u8 = self.consume8()?;
+                    mnemonic = format!("{:#04x}\tIN ${}", opcode, src_val);
                     if !execute {
                         break;
                     }
+
+                    let dst_val = self.io_space.in_port(src_val);
+                    self.reg_a = dst_val;
                 }
 
                 // OUT p     11010011 pa       -       Write A to output port
                 "11010011" => {
-                    mnemonic = format!("{:#04x}\tOUT\tUNIMPLEMENTED", opcode);
+                    let src_val: u8 = self.consume8()?;
+                    mnemonic = format!("{:#04x}\tOUT ${}", opcode, src_val);
                     if !execute {
                         break;
                     }
+
+                    let dst_val = self.reg_a;
+                    self.io_space.out_port(src_val, dst_val);
                 }
 
                 // EI        11111011          -       Enable interrupts
@@ -1207,7 +1216,7 @@ mod tests {
 
     #[test]
     fn test_all_instructions_decoding() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         for i in 0x00..=0xff {
             // avoid panics caused by not being able to grow / shrink the stack
@@ -1216,13 +1225,13 @@ mod tests {
             // set the next instruction
             cpu.addr_space.buff[cpu.reg_pc as usize] = i;
 
-            cpu.fetch_and_execute(true).unwrap();
+            println!("{}", cpu.fetch_and_execute(true).unwrap());
         }
     }
 
     #[test]
     fn test_cpudiag() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         const FIRST_ADDR: usize = 0x0100;
         for i in 0..CPUDIAG_BIN.len() {
