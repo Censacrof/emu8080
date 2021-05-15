@@ -982,7 +982,23 @@ where
             }
 
             // PUSH PP   11PP0101 *2       -       Push register pair on the stack
+            "11pp0101" => {
+                let src_id: RegId16 = REG_ID16_MAP[p as usize];
+                mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_id);
+
+                let src_val: u16 = self.get_reg16(src_id);
+                self.push16(src_val)?;
+            }
+
             // POP PP    11PP0001 *2       *2      Pop  register pair from the stack
+            "11pp0001" => {
+                let dst_id: RegId16 = REG_ID16_MAP[p as usize];
+                mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_id);
+
+                let w: u16 = self.pop16()?;
+                self.set_reg16(dst_id, w);
+            }
+
             // XTHL      11100011          -       Swap H:L with top word on stack
             // SPHL      11111001          -       Set SP to content of H:L
             // IN p      11011011 pa       -       Read input port into A
