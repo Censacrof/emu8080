@@ -472,7 +472,7 @@ where
                 let res: u16 = self.add_set_flags16(
                     dst_val,
                     1,
-                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                    flag_mask::NO_FLAGS
                 );
 
                 self.set_reg16(dst_id, res);
@@ -488,7 +488,7 @@ where
                 let res: u16 = self.sub_set_flags16(
                     dst_val,
                     1,
-                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                    flag_mask::NO_FLAGS
                 );
 
                 self.set_reg16(dst_id, res);
@@ -510,6 +510,36 @@ where
             }
 
             // DAA       00100111          ZSPCA   Decimal Adjust accumulator
+            "00100111" => {
+                let dst_id = RegId8::A;
+                mnemonic = format!("{:#04x}\tDAA", opcode);
+
+                let dst_val: u8 = self.get_reg8(dst_id);
+                let l: u8 = dst_val & 0x0fu8;                
+
+                if l > 0 || self.flags.af {
+                    let res: u8 = self.add_set_flags8(
+                        self.get_reg8(dst_id),
+                        6,
+                        flag_mask::ALL_FLAGS
+                    );
+                }
+
+                let dst_val: u8 = self.get_reg8(dst_id);
+                let mut h: u8 = (dst_val & 0xf0u8) >> 4;
+                if h > 9 || self.flags.cf {
+                    h = self.add_set_flags8(
+                        h,
+                        6,
+                        flag_mask::ALL_FLAGS
+                    );
+                    h &= 0x0f;
+                }
+
+                let res: u8 = (h << 4) + (dst_val & 0x0f);
+                self.set_reg8(dst_id, res);
+            }
+
             // ANA S     10100SSS          ZSCPA   AND register with A
             // ANI #     11100110 db       ZSPCA   AND immediate with A
             // ORA S     10110SSS          ZSPCA   OR  register with A
