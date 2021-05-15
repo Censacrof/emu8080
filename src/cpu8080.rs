@@ -258,12 +258,16 @@ where
 
     fn sub_set_flags8(&mut self, dst: u8, src: u8, affected_flags: u8) -> u8 {
         let compl_src: u8 = u8::wrapping_add(!src, 1u8);
-        return self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        self.state.flags.cf = dst < src;
+        return res;
     }
 
     fn sub_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
         let compl_src: u16 = u16::wrapping_add(!src, 1u16);
-        return self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        self.state.flags.cf = dst < src;
+        return res;
     }
 }
 

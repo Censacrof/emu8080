@@ -889,7 +889,12 @@ where
                     }
 
                     // trick to update accordingly all flags
-                    self.sub_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
+                    let dst_val: u8 = self.get_reg8(dst_id);
+                    self.sub_set_flags8(
+                        dst_val,
+                        src_val,
+                        flag_mask::ALL_FLAGS
+                    );
                 }
 
                 // RLC       00000111          C       Rotate A left
@@ -1274,9 +1279,7 @@ mod tests {
         let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
 
         // add the bios
-        cpu.addr_space.buff[0x0005] = 0xd3; // OUT
-        cpu.addr_space.buff[0x0006] = 0x02; // 2
-        cpu.addr_space.buff[0x0007] = 0xc9; // RET
+        cpu.addr_space.buff[0x0005] = 0xc9; // RET
 
         // add the program
         const FIRST_ADDR: usize = 0x0100;
@@ -1284,11 +1287,38 @@ mod tests {
             cpu.addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
         }
 
+        let mut program_output: String = "".into();
         cpu.state.reg_pc = FIRST_ADDR as u16;
         for i in 0..256 {
             let curr_pc = cpu.state.reg_pc;
+
+            if curr_pc == 0x0005 {
+                match cpu.state.reg_bc.l {
+                    2 => program_output = format!("{}{}", program_output, cpu.state.reg_de.l as char),
+                    9 => {
+                        let mut i: u16 = cpu.state.reg_de.into();
+                        loop {
+                            let c: char = cpu.addr_space.buff[i as usize] as char;
+                            if c == '$' {
+                                break;
+                            }
+
+                            i += 1;
+                            program_output = format!("{}{}", program_output, c);
+                        }
+                    }
+                    _ => {}
+                };
+            }
+
+            if curr_pc == 0x0000 {
+                break;
+            }
+
             let mne: String = cpu.fetch_and_execute(true).unwrap();
             println!("{:#06x}|\t{}", curr_pc, mne);
         }
+
+        println!("\n\nProgram output:\n{}\n", program_output);
     }
 }
