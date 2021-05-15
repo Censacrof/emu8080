@@ -114,13 +114,13 @@ where
     #[allow(dead_code)]
     fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
         match reg_id {
-            RegId8::A => self.reg_a,
-            RegId8::B => self.reg_bc.h,
-            RegId8::C => self.reg_bc.l,
-            RegId8::D => self.reg_de.h,
-            RegId8::E => self.reg_de.l,
-            RegId8::H => self.reg_hl.h,
-            RegId8::L => self.reg_hl.l,
+            RegId8::A => self.state.reg_a,
+            RegId8::B => self.state.reg_bc.h,
+            RegId8::C => self.state.reg_bc.l,
+            RegId8::D => self.state.reg_de.h,
+            RegId8::E => self.state.reg_de.l,
+            RegId8::H => self.state.reg_hl.h,
+            RegId8::L => self.state.reg_hl.l,
 
             RegId8::M => panic!("{:?} it's not a register", reg_id),
         }
@@ -129,13 +129,13 @@ where
     #[allow(dead_code)]
     fn set_reg8(&mut self, reg_id: RegId8, val: Reg8) {
         match reg_id {
-            RegId8::A => self.reg_a = val,
-            RegId8::B => self.reg_bc.h = val,
-            RegId8::C => self.reg_bc.l = val,
-            RegId8::D => self.reg_de.h = val,
-            RegId8::E => self.reg_de.l = val,
-            RegId8::H => self.reg_hl.h = val,
-            RegId8::L => self.reg_hl.l = val,
+            RegId8::A => self.state.reg_a = val,
+            RegId8::B => self.state.reg_bc.h = val,
+            RegId8::C => self.state.reg_bc.l = val,
+            RegId8::D => self.state.reg_de.h = val,
+            RegId8::E => self.state.reg_de.l = val,
+            RegId8::H => self.state.reg_hl.h = val,
+            RegId8::L => self.state.reg_hl.l = val,
 
             RegId8::M => panic!("{:?} it's not a register", reg_id),
         }
@@ -144,56 +144,56 @@ where
     #[allow(dead_code)]
     fn get_reg16(&self, reg_id: RegId16) -> Reg16 {
         match reg_id {
-            RegId16::BC => self.reg_bc.into(),
-            RegId16::DE => self.reg_de.into(),
-            RegId16::HL => self.reg_hl.into(),
-            RegId16::SP => self.reg_sp,
+            RegId16::BC => self.state.reg_bc.into(),
+            RegId16::DE => self.state.reg_de.into(),
+            RegId16::HL => self.state.reg_hl.into(),
+            RegId16::SP => self.state.reg_sp,
         }
     }
 
     #[allow(dead_code)]
     fn set_reg16(&mut self, reg_id: RegId16, val: Reg16) {
         match reg_id {
-            RegId16::BC => self.reg_bc = val.into(),
-            RegId16::DE => self.reg_de = val.into(),
-            RegId16::HL => self.reg_hl = val.into(),
-            RegId16::SP => self.reg_sp = val,
+            RegId16::BC => self.state.reg_bc = val.into(),
+            RegId16::DE => self.state.reg_de = val.into(),
+            RegId16::HL => self.state.reg_hl = val.into(),
+            RegId16::SP => self.state.reg_sp = val,
         }
     }
 
     #[allow(dead_code)]
     fn check_condition(&self, cond_id: CondId) -> bool {
         return match cond_id {
-            CondId::NZ => !self.flags.zf,
-            CondId::Z => self.flags.zf,
+            CondId::NZ => !self.state.flags.zf,
+            CondId::Z => self.state.flags.zf,
 
-            CondId::NC => !self.flags.cf,
-            CondId::C => self.flags.cf,
+            CondId::NC => !self.state.flags.cf,
+            CondId::C => self.state.flags.cf,
 
-            CondId::PO => !self.flags.pf,
-            CondId::PE => self.flags.pf,
+            CondId::PO => !self.state.flags.pf,
+            CondId::PE => self.state.flags.pf,
 
-            CondId::P => !self.flags.sf,
-            CondId::M => self.flags.sf,
+            CondId::P => !self.state.flags.sf,
+            CondId::M => self.state.flags.sf,
         };
     }
 
     #[allow(dead_code)]
     fn push8(&mut self, b: u8) -> Result<(), MemoryMapError> {
         // decrease the stack pointer
-        self.reg_sp -= 1;
+        self.state.reg_sp -= 1;
 
         // save b in the stack
-        return self.addr_space.write_b(self.reg_sp.into(), b);
+        return self.addr_space.write_b(self.state.reg_sp.into(), b);
     }
 
     #[allow(dead_code)]
     fn pop8(&mut self) -> Result<u8, MemoryMapError> {
         // read b from the stack
-        let b = self.addr_space.read_b(self.reg_sp.into());
+        let b = self.addr_space.read_b(self.state.reg_sp.into());
 
         // increase the stack pointer
-        self.reg_sp += 1;
+        self.state.reg_sp += 1;
 
         return b;
     }
@@ -201,19 +201,19 @@ where
     #[allow(dead_code)]
     fn push16(&mut self, w: u16) -> Result<(), MemoryMapError> {
         // decrease the stack pointer
-        self.reg_sp -= 2;
+        self.state.reg_sp -= 2;
 
         // save b in the stack
-        return self.addr_space.write_w(self.reg_sp.into(), w);
+        return self.addr_space.write_w(self.state.reg_sp.into(), w);
     }
 
     #[allow(dead_code)]
     fn pop16(&mut self) -> Result<u16, MemoryMapError> {
         // read b from the stack
-        let w = self.addr_space.read_w(self.reg_sp.into());
+        let w = self.addr_space.read_w(self.state.reg_sp.into());
 
         // increase the stack pointer
-        self.reg_sp += 2;
+        self.state.reg_sp += 2;
 
         return w;
     }
@@ -224,7 +224,7 @@ where
         let opcode: u8 = self.consume8()?;
 
         #[allow(unused_assignments)]
-        let mut mnemonic: String = String::from("");
+        let mut mnemonic: String = format!("{:#04x}", opcode);
 
         // useless loop just to be able to use the break keyword inside match
         for _useless in 0..1 {
@@ -252,7 +252,7 @@ where
                     let src_val: Reg8 = match src_id {
                         // src operand stored in memory
                         RegId8::M => {
-                            let addr: u16 = self.reg_hl.into();
+                            let addr: u16 = self.state.reg_hl.into();
                             self.addr_space.read_b(addr)?
                         }
 
@@ -264,7 +264,7 @@ where
                     match dst_id {
                         // store dst operand in memory
                         RegId8::M => {
-                            let addr: u16 = self.reg_hl.into();
+                            let addr: u16 = self.state.reg_hl.into();
                             self.addr_space.write_b(addr, src_val)?;
                         }
 
@@ -288,7 +288,7 @@ where
                     match dst_id {
                         // store dst operand in memory
                         RegId8::M => {
-                            let addr: u16 = self.reg_hl.into();
+                            let addr: u16 = self.state.reg_hl.into();
                             self.addr_space.write_b(addr, src_val)?;
                         }
 
@@ -470,7 +470,7 @@ where
 
                     let res = self.add_set_flags8(
                         self.get_reg8(dst_id),
-                        u8::wrapping_add(src_val, if self.flags.cf { 1 } else { 0 }),
+                        u8::wrapping_add(src_val, if self.state.flags.cf { 1 } else { 0 }),
                         flag_mask::ALL_FLAGS,
                     );
 
@@ -488,7 +488,7 @@ where
 
                     let res = self.add_set_flags8(
                         self.get_reg8(dst_id),
-                        u8::wrapping_add(src_val, if self.flags.cf { 1 } else { 0 }),
+                        u8::wrapping_add(src_val, if self.state.flags.cf { 1 } else { 0 }),
                         flag_mask::ALL_FLAGS,
                     );
 
@@ -552,7 +552,7 @@ where
 
                     let res = self.sub_set_flags8(
                         self.get_reg8(dst_id),
-                        u8::wrapping_sub(src_val, if self.flags.cf { 1 } else { 0 }),
+                        u8::wrapping_sub(src_val, if self.state.flags.cf { 1 } else { 0 }),
                         flag_mask::ALL_FLAGS,
                     );
 
@@ -570,7 +570,7 @@ where
 
                     let res = self.sub_set_flags8(
                         self.get_reg8(dst_id),
-                        u8::wrapping_sub(src_val, if self.flags.cf { 1 } else { 0 }),
+                        u8::wrapping_sub(src_val, if self.state.flags.cf { 1 } else { 0 }),
                         flag_mask::ALL_FLAGS,
                     );
 
@@ -698,7 +698,7 @@ where
                     let dst_val: u8 = self.get_reg8(dst_id);
                     let l: u8 = dst_val & 0x0fu8;
 
-                    if l > 0 || self.flags.af {
+                    if l > 0 || self.state.flags.af {
                         let res: u8 =
                             self.add_set_flags8(self.get_reg8(dst_id), 6, flag_mask::ALL_FLAGS);
                         self.set_reg8(dst_id, res);
@@ -706,7 +706,7 @@ where
 
                     let dst_val: u8 = self.get_reg8(dst_id);
                     let mut h: u8 = (dst_val & 0xf0u8) >> 4;
-                    if h > 9 || self.flags.cf {
+                    if h > 9 || self.state.flags.cf {
                         h = self.add_set_flags8(h, 6, flag_mask::ALL_FLAGS);
                         h &= 0x0f;
                     }
@@ -736,7 +736,7 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets the CF
-                    self.flags.cf = false;
+                    self.state.flags.cf = false;
 
                     let res: u8 = self.get_reg8(dst_id) & src_val;
                     self.set_reg8(dst_id, res);
@@ -755,8 +755,8 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
-                    self.flags.cf = false;
-                    self.flags.af = false;
+                    self.state.flags.cf = false;
+                    self.state.flags.af = false;
 
                     let res: u8 = self.get_reg8(dst_id) & src_val;
                     self.set_reg8(dst_id, res);
@@ -783,8 +783,8 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
-                    self.flags.cf = false;
-                    self.flags.af = false;
+                    self.state.flags.cf = false;
+                    self.state.flags.af = false;
 
                     let res: u8 = self.get_reg8(dst_id) | src_val;
                     self.set_reg8(dst_id, res);
@@ -803,8 +803,8 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
-                    self.flags.cf = false;
-                    self.flags.af = false;
+                    self.state.flags.cf = false;
+                    self.state.flags.af = false;
 
                     let res: u8 = self.get_reg8(dst_id) | src_val;
                     self.set_reg8(dst_id, res);
@@ -831,8 +831,8 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
-                    self.flags.cf = false;
-                    self.flags.af = false;
+                    self.state.flags.cf = false;
+                    self.state.flags.af = false;
 
                     let res: u8 = self.get_reg8(dst_id) ^ src_val;
                     self.set_reg8(dst_id, res);
@@ -851,8 +851,8 @@ where
                     self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
-                    self.flags.cf = false;
-                    self.flags.af = false;
+                    self.state.flags.cf = false;
+                    self.state.flags.af = false;
 
                     let res: u8 = self.get_reg8(dst_id) ^ src_val;
                     self.set_reg8(dst_id, res);
@@ -901,7 +901,7 @@ where
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    self.flags.cf = dst_val & 0x80u8 != 0;
+                    self.state.flags.cf = dst_val & 0x80u8 != 0;
                     let res = dst_val << 1;
 
                     self.set_reg8(dst_id, res);
@@ -916,7 +916,7 @@ where
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    self.flags.cf = dst_val & 0x01u8 != 0;
+                    self.state.flags.cf = dst_val & 0x01u8 != 0;
                     let res = dst_val >> 1;
 
                     self.set_reg8(dst_id, res);
@@ -931,8 +931,8 @@ where
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    let old_carry = self.flags.cf;
-                    self.flags.cf = dst_val & 0x80u8 != 0;
+                    let old_carry = self.state.flags.cf;
+                    self.state.flags.cf = dst_val & 0x80u8 != 0;
                     let res = dst_val << 1 + if old_carry { 1 } else { 0 };
 
                     self.set_reg8(dst_id, res);
@@ -947,8 +947,8 @@ where
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    let old_carry = self.flags.cf;
-                    self.flags.cf = dst_val & 0x01u8 != 0;
+                    let old_carry = self.state.flags.cf;
+                    self.state.flags.cf = dst_val & 0x01u8 != 0;
                     let res = dst_val >> 1 + if old_carry { 0x80u8 } else { 0 };
 
                     self.set_reg8(dst_id, res);
@@ -973,7 +973,7 @@ where
                         break;
                     }
 
-                    self.flags.cf = !self.flags.cf;
+                    self.state.flags.cf = !self.state.flags.cf;
                 }
 
                 // STC       00110111          C       Set Carry flag
@@ -983,7 +983,7 @@ where
                         break;
                     }
 
-                    self.flags.cf = true;
+                    self.state.flags.cf = true;
                 }
 
                 // JMP a     11000011 lb hb    -       Unconditional jump
@@ -994,7 +994,7 @@ where
                         break;
                     }
 
-                    self.reg_pc = src_val;
+                    self.state.reg_pc = src_val;
                 }
 
                 // Jccc a    11CCC010 lb hb    -       Conditional jump
@@ -1007,7 +1007,7 @@ where
                     }
 
                     if self.check_condition(cond_id) {
-                        self.reg_pc = src_val;
+                        self.state.reg_pc = src_val;
                     }
                 }
 
@@ -1020,10 +1020,10 @@ where
                     }
 
                     // save the program counter in the stack
-                    self.push16(self.reg_pc)?;
+                    self.push16(self.state.reg_pc)?;
 
                     // jump to the new addres
-                    self.reg_pc = src_val.into();
+                    self.state.reg_pc = src_val.into();
                 }
 
                 // Cccc a    11CCC100 lb hb    -       Conditional subroutine call
@@ -1037,10 +1037,10 @@ where
 
                     if self.check_condition(cond_id) {
                         // save the program counter in the stack
-                        self.push16(self.reg_pc)?;
+                        self.push16(self.state.reg_pc)?;
 
                         // jump to the new addres
-                        self.reg_pc = src_val.into();
+                        self.state.reg_pc = src_val.into();
                     }
                 }
 
@@ -1051,7 +1051,7 @@ where
                         break;
                     }
 
-                    self.reg_pc = self.pop16()?;
+                    self.state.reg_pc = self.pop16()?;
                 }
 
                 // Rccc      11CCC000          -       Conditional return from subroutine
@@ -1063,7 +1063,7 @@ where
                     }
 
                     if self.check_condition(cond_id) {
-                        self.reg_pc = self.pop16()?;
+                        self.state.reg_pc = self.pop16()?;
                     }
                 }
 
@@ -1076,10 +1076,10 @@ where
                     }
 
                     // save the program counter in the stack
-                    self.push16(self.reg_pc)?;
+                    self.push16(self.state.reg_pc)?;
 
                     // jump to the new addres
-                    self.reg_pc = src_val << 3;
+                    self.state.reg_pc = src_val << 3;
                 }
 
                 // PCHL      11101001          -       Jump to address in H:L
@@ -1090,7 +1090,7 @@ where
                         break;
                     }
 
-                    self.reg_pc = self.reg_hl.into();
+                    self.state.reg_pc = self.state.reg_hl.into();
                 }
 
                 // PUSH PP   11PP0101 *2       -       Push register pair on the stack
@@ -1108,7 +1108,7 @@ where
 
                     let src_val: u16 = match src_id {
                         RegId16::SP => {
-                            let psw_l: u8 = self.flags.into();
+                            let psw_l: u8 = self.state.flags.into();
                             let psw_h: u8 = self.get_reg8(RegId8::A);
                             let psw: u16 = (psw_l as u16) + ((psw_h as u16) << 8);
                             psw
@@ -1135,7 +1135,7 @@ where
                     let w: u16 = self.pop16()?;
                     match dst_id {
                         RegId16::SP => {
-                            self.flags = ((w & 0x00ff) as u8).into();
+                            self.state.flags = ((w & 0x00ff) as u8).into();
                             self.set_reg8(
                                 RegId8::A,
                                 (w >> 8) as u8
@@ -1168,7 +1168,7 @@ where
                         break;
                     }
 
-                    self.reg_sp = self.get_reg16(dst_id);
+                    self.state.reg_sp = self.get_reg16(dst_id);
                 }
 
                 // IN p      11011011 pa       -       Read input port into A
@@ -1179,8 +1179,8 @@ where
                         break;
                     }
 
-                    let dst_val = self.io_space.in_port(src_val);
-                    self.reg_a = dst_val;
+                    let dst_val = self.io_space.in_port(src_val, self.state);
+                    self.state.reg_a = dst_val;
                 }
 
                 // OUT p     11010011 pa       -       Write A to output port
@@ -1191,8 +1191,8 @@ where
                         break;
                     }
 
-                    let dst_val = self.reg_a;
-                    self.io_space.out_port(src_val, dst_val);
+                    let dst_val = self.state.reg_a;
+                    self.io_space.out_port(src_val, dst_val, self.state);
                 }
 
                 // EI        11111011          -       Enable interrupts
@@ -1202,7 +1202,7 @@ where
                         break;
                     }
 
-                    self.interrutpions_enabled = true;
+                    self.state.interrutpions_enabled = true;
                 }
 
                 // DI        11110011          -       Disable interrupts
@@ -1212,7 +1212,7 @@ where
                         break;
                     }
 
-                    self.interrutpions_enabled = false;
+                    self.state.interrutpions_enabled = false;
                 }
 
                 // NOP       00000000          -       No operation
@@ -1249,98 +1249,45 @@ mod tests {
 
         for i in 0x00..=0xff {
             // avoid panics caused by not being able to grow / shrink the stack
-            cpu.reg_sp = 1024;
+            cpu.state.reg_sp = 1024;
 
             // set the next instruction
-            cpu.addr_space.buff[cpu.reg_pc as usize] = i;
+            cpu.addr_space.buff[cpu.state.reg_pc as usize] = i;
 
             println!("{}", cpu.fetch_and_execute(true).unwrap());
         }
-    }
-
-    #[allow(dead_code)]
-    const CPU_DIAG_ROM: [u8; 12] = [
-        0x00, // 0  NOP
-        0x00, // 1  NOP
-        0x00, // 2  NOP
-        0x00, // 3  NOP
-        0x00, // 4  NOP
-        0x21, // 5  LXI H, 0x000a
-        0x0a, // 6  dl
-        0x00, // 7  dh
-        0x71, // 8  MOV M, C        ; use C content as the immediate port parameter of the next OUT instruction
-        0xd3, // 9  OUT
-        0x00, // 10 port
-        0xc9, // 11 RET
-    ];
+    }    
 
     struct CpudiagIOBus {}
     impl IOBus for CpudiagIOBus {
-        fn in_port(&mut self, port: u8) -> u8 {
+        fn in_port(&mut self, port: u8, state: Cpu8080State) -> u8 {
             return 0;
         }
 
-        fn out_port(&mut self, port: u8, data: u8) {
+        fn out_port(&mut self, port: u8, data: u8, state: Cpu8080State) {
             match port {
                 // char output
                 0x02 => {
                     println!("{}", data as char);
                 }
-
-                // $-terminated string
-                0x09 => {}
                 _ => {}
             }
         }
     }
 
     #[test]
-    fn test_cpudiag_io_bus() {
+    fn test_cpudiag_full() {
         let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
 
-        // add the rom part to the addr_space
-        for i in 0..CPU_DIAG_ROM.len() {
-            cpu.addr_space.buff[i] = CPU_DIAG_ROM[i];
-        }
-
-        // init the cpu
-        cpu.reg_sp = 0xffff;
-        cpu.push16(0x0100).unwrap();
-        cpu.reg_pc = 0x0005;
-
-        // 
-        cpu.reg_bc.l = 2; 
-        cpu.reg_a = 'F' as u8;
-
-        loop {
-            let curr_pc = cpu.reg_pc;
-            let mne: String = cpu.fetch_and_execute(true).unwrap();
-            println!("{:#06x}|\t{}", curr_pc, mne);
-
-            if curr_pc > CPU_DIAG_ROM.len() as u16 {
-                break;
-            }
-        }
-    }
-
-    #[test]
-    fn test_cpudiag() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
-
+        // add the program
         const FIRST_ADDR: usize = 0x0100;
         for i in 0..CPUDIAG_BIN.len() {
             cpu.addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
         }
 
-        // BDOS system call routine at addres 0x0005
-
-        cpu.reg_pc = FIRST_ADDR as u16;
-        for i in 0..32 {
-            let curr_pc = cpu.reg_pc;
-            if curr_pc as usize >= CPUDIAG_BIN.len() {
-                break;
-            }
-
+        cpu.state.reg_pc = FIRST_ADDR as u16;
+        for i in 0..256 {
+            let curr_pc = cpu.state.reg_pc;
             let mne: String = cpu.fetch_and_execute(true).unwrap();
             println!("{:#06x}|\t{}", curr_pc, mne);
         }
