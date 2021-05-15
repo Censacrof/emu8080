@@ -24,6 +24,20 @@ enum RegId16 {
     SP = 0x11,
 }
 
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+enum CondId {
+    NZ = 0x00,
+    Z  = 0x01,
+    NC = 0x02,
+    C  = 0x03,
+    PO = 0x04, // parity odd (pf == 0)
+    PE = 0x05, // parity even (pf == 1)
+    P  = 0x06, // plus (sf == 0)
+    M  = 0x07, // minus (sf == 1)
+}
+
 #[allow(dead_code)]
 const REG_ID8_MAP: [RegId8; 8] = [
     RegId8::B,
@@ -34,6 +48,26 @@ const REG_ID8_MAP: [RegId8; 8] = [
     RegId8::L,
     RegId8::M,
     RegId8::A,
+];
+
+#[allow(dead_code)]
+const REG_ID16_MAP: [RegId16; 4] = [
+    RegId16::BC,
+    RegId16::DE,
+    RegId16::HL,
+    RegId16::SP
+];
+
+#[allow(dead_code)]
+const COND_ID_MAP: [CondId; 8] = [
+    CondId::NZ,
+    CondId::Z,
+    CondId::NC,
+    CondId::C,
+    CondId::PO,
+    CondId::PE,
+    CondId::P,
+    CondId::M,
 ];
 
 impl fmt::Display for RegId8 {
@@ -62,9 +96,6 @@ impl fmt::Display for RegId16 {
         }
     }
 }
-
-#[allow(dead_code)]
-const REG_ID16_MAP: [RegId16; 4] = [RegId16::BC, RegId16::DE, RegId16::HL, RegId16::SP];
 
 impl<MemMapT> Cpu8080<MemMapT>
 where
@@ -118,6 +149,23 @@ where
             RegId16::HL => self.reg_hl = val.into(),
             RegId16::SP => self.reg_sp = val,
         }
+    }
+
+    #[allow(dead_code)]
+    fn check_condition(&self, cond_id: CondId) -> bool {
+        return match cond_id {
+            CondId::NZ => !self.flags.zf,
+            CondId::Z  => self.flags.zf,
+
+            CondId::NC => !self.flags.cf,
+            CondId::C  => self.flags.cf,
+
+            CondId::PO => !self.flags.pf,
+            CondId::PE => self.flags.pf,
+
+            CondId::P => !self.flags.sf,
+            CondId::M  => self.flags.sf,
+        };
     }
 
     #[allow(dead_code)]
