@@ -184,6 +184,46 @@ where
     }
 
     #[allow(dead_code)]
+    fn push8(&mut self, b: u8) -> Result<(), MemoryMapError> {
+        // decrease the stack pointer
+        self.reg_sp -= 1;
+
+        // save b in the stack
+        return self.addr_space.write_b(self.reg_sp.into(), b);
+    }
+
+    #[allow(dead_code)]
+    fn pop8(&mut self) -> Result<u8, MemoryMapError> {
+        // read b from the stack
+        let b = self.addr_space.read_b(self.reg_sp.into());
+
+        // increase the stack pointer
+        self.reg_sp += 1;
+
+        return b;
+    }
+
+    #[allow(dead_code)]
+    fn push16(&mut self, w: u16) -> Result<(), MemoryMapError> {
+        // decrease the stack pointer
+        self.reg_sp -= 2;
+
+        // save b in the stack
+        return self.addr_space.write_w(self.reg_sp.into(), w);
+    }
+
+    #[allow(dead_code)]
+    fn pop16(&mut self) -> Result<u16, MemoryMapError> {
+        // read b from the stack
+        let w = self.addr_space.read_w(self.reg_sp.into());
+
+        // increase the stack pointer
+        self.reg_sp += 2;
+
+        return w;
+    }
+
+    #[allow(dead_code)]
     #[bitmatch]
     fn fetch_and_execute(&mut self) -> Result<(), MemoryMapError> {
         let opcode: u8 = self.consume8()?;
@@ -878,7 +918,32 @@ where
             }
 
             // CALL a    11001101 lb hb    -       Unconditional subroutine call
+            "11001101" => {
+                let src_val: u16 = self.consume16()?;
+                mnemonic = format!("{:#04x}\tCALL ${:#06x}", opcode, src_val);
+
+                // save the program counter in the stack
+                self.push16(self.reg_pc)?;
+
+                // jump to the new addres
+                self.reg_pc = src_val.into();
+            }
+
             // Cccc a    11CCC100 lb hb    -       Conditional subroutine call
+            "11ccc100"=> {
+                let src_val: u16 = self.consume16()?;
+                let cond_id: CondId = COND_ID_MAP[c as usize];
+                mnemonic = format!("{:#04x}\tCALL{} ${:#06x}", opcode, cond_id, src_val);
+
+                if self.check_condition(cond_id) {
+                    // save the program counter in the stack
+                    self.push16(self.reg_pc)?;
+
+                    // jump to the new addres
+                    self.reg_pc = src_val.into();
+                }
+            }
+
             // RET       11001001          -       Unconditional return from subroutine
             // Rccc      11CCC000          -       Conditional return from subroutine
             // RST n     11NNN111          -       Restart (Call n*8)
@@ -914,7 +979,12 @@ mod tests {
         let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
 
         for i in 0x00..=0xff {
+            // avoid panics caused by not being able to grow / shrink the stack
+            cpu.reg_sp = 1024;
+
+            // set the next instruction
             cpu.addr_space.buff[cpu.reg_pc as usize] = i;
+
             cpu.fetch_and_execute().unwrap();
         }
     }
