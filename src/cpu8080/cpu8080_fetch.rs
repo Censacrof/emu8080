@@ -974,6 +974,13 @@ where
             }
 
             // PCHL      11101001          -       Jump to address in H:L
+            "11101001" => {
+                let src_id: RegId16 = RegId16::HL;
+                mnemonic = format!("{:#04x}\tPCHL {}", opcode, src_id);
+
+                self.reg_pc = self.reg_hl.into();
+            }
+
             // PUSH PP   11PP0101 *2       -       Push register pair on the stack
             // POP PP    11PP0001 *2       *2      Pop  register pair from the stack
             // XTHL      11100011          -       Swap H:L with top word on stack
