@@ -747,7 +747,31 @@ where
             }
 
             // RAL       00010111          C       Rotate A left through carry
+            "00010111" => {
+                let dst_id: RegId8 = RegId8::A;
+                mnemonic = format!("{:#04x}\tRAL {}", opcode, dst_id);
+
+                let dst_val: u8 = self.get_reg8(dst_id);
+                let old_carry = self.flags.cf;
+                self.flags.cf = dst_val & 0x80u8 != 0;
+                let res = dst_val << 1 + if old_carry { 1 } else { 0 };
+
+                self.set_reg8(dst_id, res);
+            }
+
             // RAR       00011111          C       Rotate A right through carry
+            "00011111" => {
+                let dst_id: RegId8 = RegId8::A;
+                mnemonic = format!("{:#04x}\tRAR {}", opcode, dst_id);
+
+                let dst_val: u8 = self.get_reg8(dst_id);
+                let old_carry = self.flags.cf;
+                self.flags.cf = dst_val & 0x01u8 != 0;
+                let res = dst_val >> 1 + if old_carry { 0x80u8 } else { 0 };
+
+                self.set_reg8(dst_id, res);
+            }
+
             // CMA       00101111          -       Compliment A
             // CMC       00111111          C       Compliment Carry flag
             // STC       00110111          C       Set Carry flag
