@@ -796,6 +796,13 @@ where
             }
 
             // JMP a     11000011 lb hb    -       Unconditional jump
+            "11000011" => {
+                let src_val: u16 = self.consume16()?;
+                mnemonic = format!("{:#04x}\tJMP ${:#06x}", opcode, src_val);
+
+                self.reg_pc = src_val;
+            }
+
             // Jccc a    11CCC010 lb hb    -       Conditional jump
             // CALL a    11001101 lb hb    -       Unconditional subroutine call
             // Cccc a    11CCC100 lb hb    -       Conditional subroutine call
