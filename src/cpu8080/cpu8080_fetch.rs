@@ -97,6 +97,21 @@ impl fmt::Display for RegId16 {
     }
 }
 
+impl fmt::Display for CondId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CondId::NZ => write!(f, "NZ"),
+            CondId::Z => write!(f, "Z"),
+            CondId::NC => write!(f, "NC"),
+            CondId::C => write!(f, "C"),
+            CondId::PO => write!(f, "PO"),
+            CondId::PE => write!(f, "PE"),
+            CondId::P => write!(f, "P"),
+            CondId::M => write!(f, "M"),
+        }
+    }
+}
+
 impl<MemMapT> Cpu8080<MemMapT>
 where
     MemMapT: MemoryMap,
