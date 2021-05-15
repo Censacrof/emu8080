@@ -415,22 +415,22 @@ where
                     RegId8::M => {
                         let dst_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.read_b(dst_addr)?
-                    },
-                    _ => self.get_reg8(dst_id)
+                    }
+                    _ => self.get_reg8(dst_id),
                 };
 
                 let res: u8 = self.add_set_flags8(
                     dst_val,
                     1,
-                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                    flag_mask::ALL_FLAGS & !flag_mask::CF, // all but CF
                 );
 
                 match dst_id {
                     RegId8::M => {
                         let dst_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.write_b(dst_addr, res)?
-                    },
-                    _ => self.set_reg8(dst_id, res)
+                    }
+                    _ => self.set_reg8(dst_id, res),
                 };
             }
 
@@ -443,22 +443,22 @@ where
                     RegId8::M => {
                         let dst_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.read_b(dst_addr)?
-                    },
-                    _ => self.get_reg8(dst_id)
+                    }
+                    _ => self.get_reg8(dst_id),
                 };
 
                 let res: u8 = self.sub_set_flags8(
                     dst_val,
                     1,
-                    flag_mask::ALL_FLAGS & !flag_mask::CF // all but CF
+                    flag_mask::ALL_FLAGS & !flag_mask::CF, // all but CF
                 );
 
                 match dst_id {
                     RegId8::M => {
                         let dst_addr = self.get_reg16(RegId16::HL);
                         self.addr_space.write_b(dst_addr, res)?
-                    },
-                    _ => self.set_reg8(dst_id, res)
+                    }
+                    _ => self.set_reg8(dst_id, res),
                 };
             }
 
@@ -469,11 +469,7 @@ where
 
                 let dst_val: u16 = self.get_reg16(dst_id);
 
-                let res: u16 = self.add_set_flags16(
-                    dst_val,
-                    1,
-                    flag_mask::NO_FLAGS
-                );
+                let res: u16 = self.add_set_flags16(dst_val, 1, flag_mask::NO_FLAGS);
 
                 self.set_reg16(dst_id, res);
             }
@@ -485,11 +481,7 @@ where
 
                 let dst_val: u16 = self.get_reg16(dst_id);
 
-                let res: u16 = self.sub_set_flags16(
-                    dst_val,
-                    1,
-                    flag_mask::NO_FLAGS
-                );
+                let res: u16 = self.sub_set_flags16(dst_val, 1, flag_mask::NO_FLAGS);
 
                 self.set_reg16(dst_id, res);
             }
@@ -503,7 +495,7 @@ where
                 let res = self.add_set_flags16(
                     self.get_reg16(dst_id),
                     self.get_reg16(src_id),
-                    flag_mask::CF
+                    flag_mask::CF,
                 );
 
                 self.set_reg16(dst_id, res);
@@ -515,24 +507,17 @@ where
                 mnemonic = format!("{:#04x}\tDAA", opcode);
 
                 let dst_val: u8 = self.get_reg8(dst_id);
-                let l: u8 = dst_val & 0x0fu8;                
+                let l: u8 = dst_val & 0x0fu8;
 
                 if l > 0 || self.flags.af {
-                    let res: u8 = self.add_set_flags8(
-                        self.get_reg8(dst_id),
-                        6,
-                        flag_mask::ALL_FLAGS
-                    );
+                    let res: u8 =
+                        self.add_set_flags8(self.get_reg8(dst_id), 6, flag_mask::ALL_FLAGS);
                 }
 
                 let dst_val: u8 = self.get_reg8(dst_id);
                 let mut h: u8 = (dst_val & 0xf0u8) >> 4;
                 if h > 9 || self.flags.cf {
-                    h = self.add_set_flags8(
-                        h,
-                        6,
-                        flag_mask::ALL_FLAGS
-                    );
+                    h = self.add_set_flags8(h, 6, flag_mask::ALL_FLAGS);
                     h &= 0x0f;
                 }
 
@@ -541,7 +526,54 @@ where
             }
 
             // ANA S     10100SSS          ZSCPA   AND register with A
+            "10100sss" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tANA {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id),
+                };
+
+                // trick to update accordingly all flags
+                self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    self.get_reg8(dst_id),
+                    flag_mask::ALL_FLAGS
+                );
+                
+                // this instruction resets the CF
+                self.flags.cf = false;
+
+                let res: u8 = self.get_reg8(dst_id) & src_val;
+                self.set_reg8(dst_id, res);
+            }
+
             // ANI #     11100110 db       ZSPCA   AND immediate with A
+            "11100110" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tANI {}, ${}", opcode, dst_id, src_val);
+
+                // trick to update accordingly all flags
+                self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    self.get_reg8(dst_id),
+                    flag_mask::ALL_FLAGS
+                );
+
+                // this instruction resets CF and AF
+                self.flags.cf = false;
+                self.flags.af = false;
+
+                let res: u8 = self.get_reg8(dst_id) & src_val;
+                self.set_reg8(dst_id, res);
+            }
+
             // ORA S     10110SSS          ZSPCA   OR  register with A
             // ORI #     11110110          ZSPCA   OR  immediate with A
             // XRA S     10101SSS          ZSPCA   ExclusiveOR register with A
