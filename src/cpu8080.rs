@@ -99,6 +99,8 @@ where
 
     // addressable space (16 bit address)
     addr_space: MemMapT,
+
+    interrutpions_enabled: bool,
 }
 
 mod flag_mask {
@@ -127,6 +129,7 @@ where
             reg_sp: 0,
             flags: FlagReg::new(),
             addr_space: mem_map,
+            interrutpions_enabled: false,
         };
     }
 

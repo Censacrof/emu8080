@@ -1019,14 +1019,37 @@ where
             }
 
             // IN p      11011011 pa       -       Read input port into A
+            "11011011" => {
+                mnemonic = format!("{:#04x}\tIN\tUNIMPLEMENTED", opcode);
+            }
+
             // OUT p     11010011 pa       -       Write A to output port
+            "11010011" => {
+                mnemonic = format!("{:#04x}\tOUT\tUNIMPLEMENTED", opcode);
+            }
+
             // EI        11111011          -       Enable interrupts
+            "11111011" => {
+                mnemonic = format!("{:#04x}\tEI", opcode);
+
+                self.interrutpions_enabled = true;
+            }
+
             // DI        11110011          -       Disable interrupts
-            // HLT       01110110          -       Halt processor
+            "11110011" => {
+                mnemonic = format!("{:#04x}\tDI", opcode);
+
+                self.interrutpions_enabled = false;
+            }
+
             // NOP       00000000          -       No operation
+            "00000000" => {
+                mnemonic = format!("{:#04x}\tNOP", opcode);
+            }
+
             _ => {
                 // unimplemented_instruction!(opcode);
-                mnemonic = format!("{:#04x}\tUNIMPLEMENTED", opcode);
+                mnemonic = format!("{:#04x}\tINVALID INSTRUCTION", opcode);
             }
         };
 
