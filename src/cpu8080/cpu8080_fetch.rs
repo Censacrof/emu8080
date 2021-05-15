@@ -2,6 +2,7 @@ use crate::cpu8080::*;
 use bitmatch::bitmatch;
 use std::*;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum RegId8 {
     A = 0x07,
@@ -14,6 +15,7 @@ enum RegId8 {
     M = 0x06,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum RegId16 {
     BC = 0x00,
@@ -22,6 +24,7 @@ enum RegId16 {
     SP = 0x11,
 }
 
+#[allow(dead_code)]
 const REG_ID8_MAP: [RegId8; 8] = [
     RegId8::B,
     RegId8::C,
@@ -60,12 +63,14 @@ impl fmt::Display for RegId16 {
     }
 }
 
+#[allow(dead_code)]
 const REG_ID16_MAP: [RegId16; 4] = [RegId16::BC, RegId16::DE, RegId16::HL, RegId16::SP];
 
 impl<MemMapT> Cpu8080<MemMapT>
 where
     MemMapT: MemoryMap,
 {
+    #[allow(dead_code)]
     fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
         match reg_id {
             RegId8::A => self.reg_a,
@@ -80,6 +85,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     fn set_reg8(&mut self, reg_id: RegId8, val: Reg8) {
         match reg_id {
             RegId8::A => self.reg_a = val,
@@ -94,6 +100,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     fn get_reg16(&self, reg_id: RegId16) -> Reg16 {
         match reg_id {
             RegId16::BC => self.reg_bc.into(),
@@ -103,6 +110,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     fn set_reg16(&mut self, reg_id: RegId16, val: Reg16) {
         match reg_id {
             RegId16::BC => self.reg_bc = val.into(),
@@ -112,9 +120,12 @@ where
         }
     }
 
+    #[allow(dead_code)]
     #[bitmatch]
     fn fetch_and_execute(&mut self) -> Result<(), MemoryMapError> {
         let opcode: u8 = self.consume8()?;
+
+        #[allow(unused_assignments)]
         let mut mnemonic: String = String::from("");
 
         #[bitmatch]
@@ -698,6 +709,19 @@ where
             }
 
             // CPI #     11111110          ZSPCA   Compare immediate with A
+            "11111110" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tCPI {}, ${}", opcode, dst_id, src_val);
+
+                // trick to update accordingly all flags
+                self.sub_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+            }
+
             // RLC       00000111          C       Rotate A left
             // RRC       00001111          C       Rotate A right
             // RAL       00010111          C       Rotate A left through carry
