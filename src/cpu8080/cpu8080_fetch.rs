@@ -867,6 +867,16 @@ where
             }
 
             // Jccc a    11CCC010 lb hb    -       Conditional jump
+            "11ccc010" => {
+                let src_val: u16 = self.consume16()?;
+                let cond_id: CondId = COND_ID_MAP[c as usize];
+                mnemonic = format!("{:#04x}\tJ{} ${:#06x}", opcode, cond_id, src_val);
+
+                if self.check_condition(cond_id) {
+                    self.reg_pc = src_val;
+                }
+            }
+
             // CALL a    11001101 lb hb    -       Unconditional subroutine call
             // Cccc a    11CCC100 lb hb    -       Conditional subroutine call
             // RET       11001001          -       Unconditional return from subroutine
