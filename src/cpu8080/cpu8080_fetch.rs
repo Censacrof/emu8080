@@ -1000,7 +1000,24 @@ where
             }
 
             // XTHL      11100011          -       Swap H:L with top word on stack
+            "11100011" => {
+                let dst_id: RegId16 = RegId16::HL;
+                mnemonic = format!("{:#04x}\tXTHL {}", opcode, dst_id);
+
+                let swap = self.get_reg16(dst_id);                
+                let w: u16 = self.pop16()?;
+                self.set_reg16(dst_id, w);
+                self.push16(swap)?;
+            }
+
             // SPHL      11111001          -       Set SP to content of H:L
+            "11111001" => {
+                let dst_id: RegId16 = RegId16::HL;
+                mnemonic = format!("{:#04x}\tSPHL {}", opcode, dst_id);
+
+                self.reg_sp = self.get_reg16(dst_id);
+            }
+
             // IN p      11011011 pa       -       Read input port into A
             // OUT p     11010011 pa       -       Write A to output port
             // EI        11111011          -       Enable interrupts
