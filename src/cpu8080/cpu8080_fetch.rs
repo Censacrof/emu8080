@@ -575,7 +575,55 @@ where
             }
 
             // ORA S     10110SSS          ZSPCA   OR  register with A
+            "10110sss" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tORA {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id),
+                };
+
+                // trick to update accordingly all flags
+                self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    self.get_reg8(dst_id),
+                    flag_mask::ALL_FLAGS
+                );
+                
+                // this instruction resets CF and AF
+                self.flags.cf = false;
+                self.flags.af = false;
+
+                let res: u8 = self.get_reg8(dst_id) | src_val;
+                self.set_reg8(dst_id, res);
+            }
+
             // ORI #     11110110          ZSPCA   OR  immediate with A
+            "11110110" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_val: u8 = self.consume8()?;
+                mnemonic = format!("{:#04x}\tORI {}, ${}", opcode, dst_id, src_val);
+
+                // trick to update accordingly all flags
+                self.add_set_flags8(
+                    self.get_reg8(dst_id),
+                    self.get_reg8(dst_id),
+                    flag_mask::ALL_FLAGS
+                );
+
+                // this instruction resets CF and AF
+                self.flags.cf = false;
+                self.flags.af = false;
+
+                let res: u8 = self.get_reg8(dst_id) & src_val;
+                self.set_reg8(dst_id, res);
+            }
+
             // XRA S     10101SSS          ZSPCA   ExclusiveOR register with A
             // XRI #     11101110 db       ZSPCA   ExclusiveOR immediate with A
             // CMP S     10111SSS          ZSPCA   Compare register with A
