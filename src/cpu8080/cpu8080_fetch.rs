@@ -512,6 +512,7 @@ where
                 if l > 0 || self.flags.af {
                     let res: u8 =
                         self.add_set_flags8(self.get_reg8(dst_id), 6, flag_mask::ALL_FLAGS);
+                    self.set_reg8(dst_id, res);
                 }
 
                 let dst_val: u8 = self.get_reg8(dst_id);
@@ -542,7 +543,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
                 
@@ -562,7 +563,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
 
@@ -591,7 +592,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
                 
@@ -612,7 +613,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
 
@@ -641,7 +642,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
                 
@@ -662,7 +663,7 @@ where
                 // trick to update accordingly all flags
                 self.add_set_flags8(
                     self.get_reg8(dst_id),
-                    self.get_reg8(dst_id),
+                    src_val,
                     flag_mask::ALL_FLAGS
                 );
 
@@ -675,6 +676,27 @@ where
             }
 
             // CMP S     10111SSS          ZSPCA   Compare register with A
+            "10111sss" => {
+                let dst_id: RegId8 = RegId8::A;
+                let src_id: RegId8 = REG_ID8_MAP[s as usize];
+                mnemonic = format!("{:#04x}\tCMP {}, {}", opcode, dst_id, src_id);
+
+                let src_val: u8 = match src_id {
+                    RegId8::M => {
+                        let src_addr = self.get_reg16(RegId16::HL);
+                        self.addr_space.read_b(src_addr)?
+                    }
+                    _ => self.get_reg8(src_id),
+                };
+
+                // trick to update accordingly all flags
+                self.sub_set_flags8(
+                    self.get_reg8(dst_id),
+                    src_val,
+                    flag_mask::ALL_FLAGS
+                );
+            }
+
             // CPI #     11111110          ZSPCA   Compare immediate with A
             // RLC       00000111          C       Rotate A left
             // RRC       00001111          C       Rotate A right
