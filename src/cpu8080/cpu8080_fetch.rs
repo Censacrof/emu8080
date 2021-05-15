@@ -945,8 +945,34 @@ where
             }
 
             // RET       11001001          -       Unconditional return from subroutine
+            "11001001" => {
+                mnemonic = format!("{:#04x}\tRET", opcode);
+
+                self.reg_pc = self.pop16()?;
+            }
+
             // Rccc      11CCC000          -       Conditional return from subroutine
+            "11ccc000" => {
+                let cond_id: CondId = COND_ID_MAP[c as usize];
+                mnemonic = format!("{:#04x}\tRET{}", opcode, cond_id);
+
+                if self.check_condition(cond_id) {
+                    self.reg_pc = self.pop16()?;
+                }
+            }
+
             // RST n     11NNN111          -       Restart (Call n*8)
+            "11nnn111" => {
+                let src_val = n as u16; // n * 8
+                mnemonic = format!("{:#04x}\tRST{}", opcode, src_val);
+
+                // save the program counter in the stack
+                self.push16(self.reg_pc)?;
+
+                // jump to the new addres
+                self.reg_pc = src_val << 3;
+            }
+
             // PCHL      11101001          -       Jump to address in H:L
             // PUSH PP   11PP0101 *2       -       Push register pair on the stack
             // POP PP    11PP0001 *2       *2      Pop  register pair from the stack
