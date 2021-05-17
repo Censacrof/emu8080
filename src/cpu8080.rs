@@ -1,6 +1,6 @@
 use std::*;
 
-mod cpu8080_fetch;
+mod fetch;
 
 type Reg8 = u8;
 type Reg16 = u16;
