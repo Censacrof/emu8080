@@ -97,7 +97,7 @@ impl ops::AddAssign for Reg8Pair {
 }
 
 #[derive(Debug)]
-enum MemoryMapError {}
+pub enum MemoryMapError {}
 impl fmt::Display for MemoryMapError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Memory Map Error")
@@ -106,7 +106,7 @@ impl fmt::Display for MemoryMapError {
 
 impl error::Error for MemoryMapError {}
 
-trait MemoryMap {
+pub trait MemoryMap {
     fn read_b(&self, addr: u16) -> Result<u8, MemoryMapError>;
     fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError>;
 
@@ -115,7 +115,7 @@ trait MemoryMap {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-struct Cpu8080State {
+pub struct Cpu8080State {
     // accumulator
     reg_a: Reg8,
 
@@ -151,23 +151,14 @@ impl fmt::Display for Cpu8080State {
     }
 }
 
-trait IOBus {
+pub trait IOBus {
     fn in_port(&mut self, port: u8) -> u8;
     fn out_port(&mut self, port: u8, data: u8);
 }
 
-struct Cpu8080<MemMapT, IOBusT>
-where
-    MemMapT: MemoryMap,
-    IOBusT: IOBus,
+pub struct Cpu8080
 {
     state: Cpu8080State,
-
-    // addressable space (16 bit address)
-    addr_space: MemMapT,
-
-    // I/O space (8 bit address)
-    io_space: IOBusT,
 }
 
 mod flag_mask {
@@ -181,16 +172,11 @@ mod flag_mask {
     pub const NO_FLAGS: u8 = 0;
 }
 
-impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
-where
-    MemMapT: MemoryMap,
-    IOBusT: IOBus,
+impl Cpu8080
 {
-    pub fn new(mem_map: MemMapT, io_bus: IOBusT) -> Self {
+    pub fn new() -> Self {
         return Self {
             state: Default::default(),
-            addr_space: mem_map,
-            io_space: io_bus,
         };
     }
 
@@ -198,14 +184,14 @@ where
         self.state.reg_pc = 0u16.into();
     }
 
-    fn consume8(&mut self) -> Result<u8, MemoryMapError> {
-        let b: u8 = self.addr_space.read_b(self.state.reg_pc.into())?;
+    fn consume8<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u8, MemoryMapError> {
+        let b: u8 = addr_space.read_b(self.state.reg_pc.into())?;
         self.state.reg_pc += 1;
         return Ok(b);
     }
 
-    fn consume16(&mut self) -> Result<u16, MemoryMapError> {
-        return Ok((self.consume8()? as u16) + ((self.consume8()? as u16) << 8));
+    fn consume16<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u16, MemoryMapError> {
+        return Ok((self.consume8(addr_space)? as u16) + ((self.consume8(addr_space)? as u16) << 8));
     }
 
     pub fn cycle(&mut self) {}
@@ -373,11 +359,11 @@ mod tests {
             mem.buff[i as usize] = i as u8;
         }
 
-        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        let mut cpu = Cpu8080::new();
         cpu.state.reg_pc = 0;
 
         for i in 0..N_IT {
-            let b = cpu.consume8().unwrap();
+            let b = cpu.consume8(&mem).unwrap();
             println!("PC: {}; b: {}", cpu.state.reg_pc, b);
 
             assert_eq!(b, i as u8);
@@ -395,16 +381,16 @@ mod tests {
         mem.buff[0] = BL;
         mem.buff[1] = BH;
 
-        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        let mut cpu = Cpu8080::new();
         cpu.state.reg_pc = 0;
 
-        assert_eq!(cpu.consume16().unwrap(), W);
+        assert_eq!(cpu.consume16(&mem).unwrap(), W);
         assert_eq!(cpu.state.reg_pc, 2);
     }
 
     #[test]
     fn test_cpu_add_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0xffu8;
@@ -469,7 +455,7 @@ mod tests {
 
     #[test]
     fn test_cpu_add_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ---------------
         let a = 0xffffu16;
@@ -534,7 +520,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0x80u8;
@@ -561,7 +547,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0x0080u16;
