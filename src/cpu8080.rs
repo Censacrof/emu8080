@@ -1,6 +1,6 @@
 use std::*;
 
-mod cpu8080_fetch;
+mod fetch;
 
 type Reg8 = u8;
 type Reg16 = u16;
@@ -20,7 +20,45 @@ impl FlagReg {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+impl From<FlagReg> for Reg8 {
+    fn from(item: FlagReg) -> Self {
+        let mut res: Self = 0x02;
+
+        if item.cf { res |= flag_mask::CF }
+        if item.pf { res |= flag_mask::PF }
+        if item.af { res |= flag_mask::AF }
+        if item.zf { res |= flag_mask::ZF }
+        if item.sf { res |= flag_mask::SF }
+
+        return res;
+    }
+}
+
+impl From<Reg8> for FlagReg {
+    fn from(item: Reg8) -> Self {
+        return FlagReg {
+            cf: item & flag_mask::CF != 0,
+            pf: item & flag_mask::PF != 0,
+            af: item & flag_mask::AF != 0,
+            zf: item & flag_mask::ZF != 0,
+            sf: item & flag_mask::SF != 0,
+        };
+    }
+}
+
+impl fmt::Display for FlagReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}{}{}",
+            if self.cf { "C" } else { "c" },
+            if self.pf { "P" } else { "p" },
+            if self.af { "A" } else { "a" },
+            if self.zf { "Z" } else { "z" },
+            if self.sf { "S" } else { "s" },
+        )
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
 struct Reg8Pair {
     h: Reg8,
     l: Reg8,
@@ -76,10 +114,8 @@ trait MemoryMap {
     fn write_w(&mut self, addr: u16, b: u16) -> Result<(), MemoryMapError>;
 }
 
-struct Cpu8080<MemMapT>
-where
-    MemMapT: MemoryMap,
-{
+#[derive(Debug, Copy, Clone, Default)]
+struct Cpu8080State {
     // accumulator
     reg_a: Reg8,
 
@@ -97,46 +133,74 @@ where
     // flag registers
     flags: FlagReg,
 
+    interrutpions_enabled: bool,
+}
+
+impl fmt::Display for Cpu8080State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "A: {:#04x}; BC: {:#06x}; DE: {:#06x}; HL: {:#06x}; PC: {:#06x}; SP: {:#06x}; F: {}; IE: {};",
+            self.reg_a,
+            u16::from(self.reg_bc),
+            u16::from(self.reg_de),
+            u16::from(self.reg_hl),
+            u16::from(self.reg_pc),
+            u16::from(self.reg_sp),
+            self.flags,
+            self.interrutpions_enabled,
+        )
+    }
+}
+
+trait IOBus {
+    fn in_port(&mut self, port: u8) -> u8;
+    fn out_port(&mut self, port: u8, data: u8);
+}
+
+struct Cpu8080<MemMapT, IOBusT>
+where
+    MemMapT: MemoryMap,
+    IOBusT: IOBus,
+{
+    state: Cpu8080State,
+
     // addressable space (16 bit address)
     addr_space: MemMapT,
+
+    // I/O space (8 bit address)
+    io_space: IOBusT,
 }
 
 mod flag_mask {
-    pub const ZF: u8 = 0x01u8;
-    pub const SF: u8 = 0x02u8;
-    pub const PF: u8 = 0x04u8;
-    pub const CF: u8 = 0x08u8;
-    pub const AF: u8 = 0x10u8;
+    pub const CF: u8 = 1;
+    pub const PF: u8 = 4;
+    pub const AF: u8 = 16;
+    pub const ZF: u8 = 64;
+    pub const SF: u8 = 128;    
 
-    pub const IS_SUB: u8 = 0x20u8;
-    pub const ALL_FLAGS: u8 = 0xff & !IS_SUB;
-    pub const NO_FLAGS: u8 = 0u8;
+    pub const ALL_FLAGS: u8 = 0xff;
+    pub const NO_FLAGS: u8 = 0;
 }
 
-impl<MemMapT> Cpu8080<MemMapT>
+impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
 where
     MemMapT: MemoryMap,
+    IOBusT: IOBus,
 {
-    pub fn new(mem_map: MemMapT) -> Self {
+    pub fn new(mem_map: MemMapT, io_bus: IOBusT) -> Self {
         return Self {
-            reg_a: 0,
-            reg_bc: 0.into(),
-            reg_de: 0.into(),
-            reg_hl: 0.into(),
-            reg_pc: 0,
-            reg_sp: 0,
-            flags: FlagReg::new(),
+            state: Default::default(),
             addr_space: mem_map,
+            io_space: io_bus,
         };
     }
 
     pub fn reset(&mut self) {
-        self.reg_pc = 0u16.into();
+        self.state.reg_pc = 0u16.into();
     }
 
     fn consume8(&mut self) -> Result<u8, MemoryMapError> {
-        let b: u8 = self.addr_space.read_b(self.reg_pc.into())?;
-        self.reg_pc += 1;
+        let b: u8 = self.addr_space.read_b(self.state.reg_pc.into())?;
+        self.state.reg_pc += 1;
         return Ok(b);
     }
 
@@ -153,11 +217,11 @@ where
         let res8 = res16 as u8;
 
         if affected_flags & flag_mask::ZF != 0 {
-            self.flags.zf = res8 == 0;
+            self.state.flags.zf = res8 == 0;
         }
 
         if affected_flags & flag_mask::SF != 0 {
-            self.flags.sf = res8 & 0x80u8 != 0;
+            self.state.flags.sf = res8 & 0x80u8 != 0;
         }
 
         if affected_flags & flag_mask::PF != 0 {
@@ -165,18 +229,17 @@ where
             for i in 0..8 {
                 mod2sum = (mod2sum + (res8 >> i) & 0x01u8) % 2;
             }
-            self.flags.pf = mod2sum == 0;
+            self.state.flags.pf = mod2sum == 0;
         }
 
-        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
-            self.flags.cf = (res16 & 0xff00u16 != 0) ^ is_sub;
+            self.state.flags.cf = res16 & 0xff00u16 != 0;
         }
 
         if affected_flags & flag_mask::AF != 0 {
             let dst4 = dst & 0x0f;
             let src4 = src & 0x0f;
-            self.flags.af = (dst4 + src4) & 0xf0 != 0;
+            self.state.flags.af = (dst4 + src4) & 0xf0 != 0;
         }
 
         return res8;
@@ -189,11 +252,11 @@ where
         let res16 = res32 as u16;
 
         if affected_flags & flag_mask::ZF != 0 {
-            self.flags.zf = res16 == 0;
+            self.state.flags.zf = res16 == 0;
         }
 
         if affected_flags & flag_mask::SF != 0 {
-            self.flags.sf = res16 & 0x8000u16 != 0;
+            self.state.flags.sf = res16 & 0x8000u16 != 0;
         }
 
         if affected_flags & flag_mask::PF != 0 {
@@ -201,18 +264,17 @@ where
             for i in 0..16 {
                 mod2sum = (mod2sum + (res16 >> i) & 0x0001u16) % 2;
             }
-            self.flags.pf = mod2sum == 0;
+            self.state.flags.pf = mod2sum == 0;
         }
 
-        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
-            self.flags.cf = (res32 & 0xffff0000u32 != 0) ^ is_sub;
+            self.state.flags.cf = res32 & 0xffff0000u32 != 0;
         }
 
         if affected_flags & flag_mask::AF != 0 {
             let dst4 = dst & 0x0f;
             let src4 = src & 0x0f;
-            self.flags.af = (dst4 + src4) & 0xf0 != 0;
+            self.state.flags.af = (dst4 + src4) & 0xf0 != 0;
         }
 
         return res16;
@@ -220,12 +282,16 @@ where
 
     fn sub_set_flags8(&mut self, dst: u8, src: u8, affected_flags: u8) -> u8 {
         let compl_src: u8 = u8::wrapping_add(!src, 1u8);
-        return self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags8(dst, compl_src, affected_flags);
+        self.state.flags.cf = dst < src;
+        return res;
     }
 
     fn sub_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
         let compl_src: u16 = u16::wrapping_add(!src, 1u16);
-        return self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags16(dst, compl_src, affected_flags);
+        self.state.flags.cf = dst < src;
+        return res;
     }
 }
 
@@ -280,6 +346,14 @@ mod tests {
         }
     }
 
+    pub struct TestIOBus {}
+    impl IOBus for TestIOBus {
+        fn in_port(&mut self, port: u8) -> u8 {
+            return 0;
+        }
+        fn out_port(&mut self, port: u8, data: u8) {}
+    }
+
     #[test]
     fn test_memory_map() {
         const addr: u16 = 42u16;
@@ -299,15 +373,15 @@ mod tests {
             mem.buff[i as usize] = i as u8;
         }
 
-        let mut cpu = Cpu8080::new(mem);
-        cpu.reg_pc = 0;
+        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        cpu.state.reg_pc = 0;
 
         for i in 0..N_IT {
             let b = cpu.consume8().unwrap();
-            println!("PC: {}; b: {}", cpu.reg_pc, b);
+            println!("PC: {}; b: {}", cpu.state.reg_pc, b);
 
             assert_eq!(b, i as u8);
-            assert_eq!(cpu.reg_pc, i + 1 as u16);
+            assert_eq!(cpu.state.reg_pc, i + 1 as u16);
         }
     }
 
@@ -321,16 +395,16 @@ mod tests {
         mem.buff[0] = BL;
         mem.buff[1] = BH;
 
-        let mut cpu = Cpu8080::new(mem);
-        cpu.reg_pc = 0;
+        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        cpu.state.reg_pc = 0;
 
         assert_eq!(cpu.consume16().unwrap(), W);
-        assert_eq!(cpu.reg_pc, 2);
+        assert_eq!(cpu.state.reg_pc, 2);
     }
 
     #[test]
     fn test_cpu_add_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0xffu8;
@@ -338,11 +412,11 @@ mod tests {
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x00u8);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: true,
                 sf: false,
@@ -358,11 +432,11 @@ mod tests {
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x90u8);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: false,
                 sf: true,
@@ -378,11 +452,11 @@ mod tests {
         let res = cpu.add_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} + {:#04x} = {:#04x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x08u8);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: false,
                 sf: false,
@@ -395,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_cpu_add_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ---------------
         let a = 0xffffu16;
@@ -403,11 +477,11 @@ mod tests {
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x0000u16);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: true,
                 sf: false,
@@ -423,11 +497,11 @@ mod tests {
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x8100u16);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: false,
                 sf: true,
@@ -443,11 +517,11 @@ mod tests {
         let res = cpu.add_set_flags16(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#06x} + {:#06x} = {:#06x}; flags: {:?}",
-            a, b, res, cpu.flags
+            a, b, res, cpu.state.flags
         );
         assert_eq!(res, 0x08u16);
         assert_eq!(
-            cpu.flags,
+            cpu.state.flags,
             FlagReg {
                 zf: false,
                 sf: false,
@@ -460,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0x80u8;
@@ -468,10 +542,10 @@ mod tests {
         let res = cpu.sub_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
-            a, b, res, cpu.flags.cf
+            a, b, res, cpu.state.flags.cf
         );
         assert_eq!(res, 0x7fu8);
-        assert_eq!(cpu.flags.cf, false);
+        assert_eq!(cpu.state.flags.cf, false);
 
         // ------------
         let a = 0x07u8;
@@ -479,15 +553,15 @@ mod tests {
         let res = cpu.sub_set_flags8(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
-            a, b, res, cpu.flags.cf
+            a, b, res, cpu.state.flags.cf
         );
         assert_eq!(res, 0x52u8);
-        assert_eq!(cpu.flags.cf, true);
+        assert_eq!(cpu.state.flags.cf, true);
     }
 
     #[test]
     fn test_cpu_sub_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] });
+        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
 
         // ------------
         let a = 0x0080u16;
@@ -495,10 +569,10 @@ mod tests {
         let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#06x} - {:#06x} = {:#06x}; borrow_out (CF): {}",
-            a, b, res, cpu.flags.cf
+            a, b, res, cpu.state.flags.cf
         );
         assert_eq!(res, 0x007fu16);
-        assert_eq!(cpu.flags.cf, false);
+        assert_eq!(cpu.state.flags.cf, false);
 
         // ------------
         let a = 0x0007u16;
@@ -506,9 +580,9 @@ mod tests {
         let res = cpu.sub_set_flags16(a, b, flag_mask::ALL_FLAGS);
         println!(
             "{:#04x} - {:#04x} = {:#04x}; borrow_out (CF): {}",
-            a, b, res, cpu.flags.cf
+            a, b, res, cpu.state.flags.cf
         );
         assert_eq!(res, 0xff52u16);
-        assert_eq!(cpu.flags.cf, true);
+        assert_eq!(cpu.state.flags.cf, true);
     }
 }
