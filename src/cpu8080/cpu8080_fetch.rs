@@ -829,14 +829,15 @@ where
                         _ => self.get_reg8(src_id),
                     };
 
+                    let res: u8 = self.get_reg8(dst_id) ^ src_val;
+
                     // trick to update accordingly all flags
-                    self.add_set_flags8(self.get_reg8(dst_id), src_val, flag_mask::ALL_FLAGS);
+                    self.add_set_flags8(res, 0, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
                     self.state.flags.cf = false;
                     self.state.flags.af = false;
 
-                    let res: u8 = self.get_reg8(dst_id) ^ src_val;
                     self.set_reg8(dst_id, res);
                 }
 
