@@ -24,11 +24,21 @@ impl From<FlagReg> for Reg8 {
     fn from(item: FlagReg) -> Self {
         let mut res: Self = 0x02;
 
-        if item.cf { res |= flag_mask::CF }
-        if item.pf { res |= flag_mask::PF }
-        if item.af { res |= flag_mask::AF }
-        if item.zf { res |= flag_mask::ZF }
-        if item.sf { res |= flag_mask::SF }
+        if item.cf {
+            res |= flag_mask::CF
+        }
+        if item.pf {
+            res |= flag_mask::PF
+        }
+        if item.af {
+            res |= flag_mask::AF
+        }
+        if item.zf {
+            res |= flag_mask::ZF
+        }
+        if item.sf {
+            res |= flag_mask::SF
+        }
 
         return res;
     }
@@ -48,7 +58,9 @@ impl From<Reg8> for FlagReg {
 
 impl fmt::Display for FlagReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}{}{}",
+        write!(
+            f,
+            "{}{}{}{}{}",
             if self.cf { "C" } else { "c" },
             if self.pf { "P" } else { "p" },
             if self.af { "A" } else { "a" },
@@ -156,8 +168,7 @@ pub trait IOBus {
     fn out_port(&mut self, port: u8, data: u8);
 }
 
-pub struct Cpu8080
-{
+pub struct Cpu8080 {
     state: Cpu8080State,
 }
 
@@ -166,14 +177,13 @@ mod flag_mask {
     pub const PF: u8 = 4;
     pub const AF: u8 = 16;
     pub const ZF: u8 = 64;
-    pub const SF: u8 = 128;    
+    pub const SF: u8 = 128;
 
     pub const ALL_FLAGS: u8 = 0xff;
     pub const NO_FLAGS: u8 = 0;
 }
 
-impl Cpu8080
-{
+impl Cpu8080 {
     pub fn new() -> Self {
         return Self {
             state: Default::default(),

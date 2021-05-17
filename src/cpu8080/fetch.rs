@@ -106,8 +106,7 @@ impl fmt::Display for CondId {
     }
 }
 
-impl Cpu8080
-{
+impl Cpu8080 {
     #[allow(dead_code)]
     fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
         match reg_id {
@@ -217,7 +216,12 @@ impl Cpu8080
 
     #[allow(dead_code)]
     #[bitmatch]
-    pub fn fetch_and_execute<MemMapT: MemoryMap, IOBusT: IOBus>(&mut self, execute: bool, addr_space: &mut MemMapT, io_space: &mut IOBusT) -> Result<String, MemoryMapError> {
+    pub fn fetch_and_execute<MemMapT: MemoryMap, IOBusT: IOBus>(
+        &mut self,
+        execute: bool,
+        addr_space: &mut MemMapT,
+        io_space: &mut IOBusT,
+    ) -> Result<String, MemoryMapError> {
         let opcode: u8 = self.consume8(addr_space)?;
 
         #[allow(unused_assignments)]
@@ -711,7 +715,11 @@ impl Cpu8080
                     }
 
                     // trick to update accordingly all other flags
-                    self.add_set_flags8(res, 0, flag_mask::ALL_FLAGS & !flag_mask::AF & !flag_mask::CF);
+                    self.add_set_flags8(
+                        res,
+                        0,
+                        flag_mask::ALL_FLAGS & !flag_mask::AF & !flag_mask::CF,
+                    );
 
                     self.set_reg8(dst_id, res);
                 }
@@ -762,7 +770,6 @@ impl Cpu8080
                     self.state.flags.cf = false;
                     self.state.flags.af = false;
 
-                    
                     self.set_reg8(dst_id, res);
                 }
 
@@ -895,11 +902,7 @@ impl Cpu8080
 
                     // trick to update accordingly all flags
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    self.sub_set_flags8(
-                        dst_val,
-                        src_val,
-                        flag_mask::ALL_FLAGS
-                    );
+                    self.sub_set_flags8(dst_val, src_val, flag_mask::ALL_FLAGS);
                 }
 
                 // ROTATE ACCUMULATOR INSTRUCTIONS
@@ -929,11 +932,8 @@ impl Cpu8080
                             self.state.flags.cf = msb;
 
                             let res: u8 = (dst_val << 1) + msb as u8;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RRC
                         1 => {
@@ -941,11 +941,8 @@ impl Cpu8080
                             self.state.flags.cf = lsb;
 
                             let res: u8 = (dst_val >> 1) + if lsb { 0x80 } else { 0 };
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RAL
                         2 => {
@@ -955,11 +952,8 @@ impl Cpu8080
                             self.state.flags.cf = msb;
 
                             let res: u8 = (dst_val << 1) + old_carry as u8;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RAR
                         3 => {
@@ -968,17 +962,13 @@ impl Cpu8080
                             let old_carry: bool = self.state.flags.cf;
                             self.state.flags.cf = lsb;
 
-                            let res: u8 = (dst_val >> 1) + if old_carry { 0x80 } else { 0 } ;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            let res: u8 = (dst_val >> 1) + if old_carry { 0x80 } else { 0 };
+                            self.set_reg8(dst_id, res);
+                        }
 
                         _ => {}
                     }
                 }
-
 
                 // CMA       00101111          -       Compliment A
                 "00101111" => {
@@ -1124,7 +1114,7 @@ impl Cpu8080
                     let src_id: RegId16 = REG_ID16_MAP[p as usize];
                     let src_mne: String = match src_id {
                         RegId16::SP => "PSW".into(),
-                        _ => format!("{}", src_id)
+                        _ => format!("{}", src_id),
                     };
 
                     mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
@@ -1138,10 +1128,10 @@ impl Cpu8080
                             let psw_h: u8 = self.get_reg8(RegId8::A);
                             let psw: u16 = (psw_l as u16) + ((psw_h as u16) << 8);
                             psw
-                        },
+                        }
                         _ => self.get_reg16(src_id),
-                    };                    
-                    
+                    };
+
                     self.push16(addr_space, src_val)?;
                 }
 
@@ -1162,14 +1152,10 @@ impl Cpu8080
                     match dst_id {
                         RegId16::SP => {
                             self.state.flags = ((w & 0x00ff) as u8).into();
-                            self.set_reg8(
-                                RegId8::A,
-                                (w >> 8) as u8
-                            );
-                        },
-                        _ => { self.set_reg16(dst_id, w) },
+                            self.set_reg8(RegId8::A, (w >> 8) as u8);
+                        }
+                        _ => self.set_reg16(dst_id, w),
                     };
-                    
                 }
 
                 // XTHL      11100011          -       Swap H:L with top word on stack
@@ -1282,10 +1268,12 @@ mod tests {
             // set the next instruction
             addr_space.buff[cpu.state.reg_pc as usize] = i;
 
-            let mnemonic = cpu.fetch_and_execute(true, &mut addr_space, &mut io_space).unwrap();
+            let mnemonic = cpu
+                .fetch_and_execute(true, &mut addr_space, &mut io_space)
+                .unwrap();
             println!("{}", mnemonic);
         }
-    }    
+    }
 
     struct CpudiagIOBus {}
     impl IOBus for CpudiagIOBus {
@@ -1293,9 +1281,7 @@ mod tests {
             return 0;
         }
 
-        fn out_port(&mut self, port: u8, data: u8) {
-            
-        }
+        fn out_port(&mut self, port: u8, data: u8) {}
     }
 
     #[test]
@@ -1322,7 +1308,9 @@ mod tests {
 
             if curr_pc == 0x0005 {
                 match cpu.state.reg_bc.l {
-                    2 => program_output = format!("{}{}", program_output, cpu.state.reg_de.l as char),
+                    2 => {
+                        program_output = format!("{}{}", program_output, cpu.state.reg_de.l as char)
+                    }
                     9 => {
                         let mut i: u16 = cpu.state.reg_de.into();
                         loop {
@@ -1334,7 +1322,7 @@ mod tests {
                             i += 1;
                             program_output = format!("{}{}", program_output, c);
                         }
-                    }                    
+                    }
                     _ => {}
                 };
             }
@@ -1348,7 +1336,9 @@ mod tests {
                 break;
             }
 
-            let mne: String = cpu.fetch_and_execute(true, &mut addr_space, &mut io_space).unwrap();
+            let mne: String = cpu
+                .fetch_and_execute(true, &mut addr_space, &mut io_space)
+                .unwrap();
             if log_instructions {
                 println!("{:#06x}|{:30}{}", curr_pc, mne, curr_state);
             }
