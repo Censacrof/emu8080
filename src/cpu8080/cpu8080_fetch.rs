@@ -696,22 +696,25 @@ where
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    let l: u8 = dst_val & 0x0fu8;
+                    let mut res: u8 = dst_val;
 
-                    if l > 0 || self.state.flags.af {
-                        let res: u8 =
-                            self.add_set_flags8(self.get_reg8(dst_id), 6, flag_mask::ALL_FLAGS);
-                        self.set_reg8(dst_id, res);
+                    {
+                        let l: u8 = res & 0x0f;
+                        if l > 9 || self.state.flags.af {
+                            res = self.add_set_flags8(res, 0x06, flag_mask::AF);
+                        }
                     }
 
-                    let dst_val: u8 = self.get_reg8(dst_id);
-                    let mut h: u8 = (dst_val & 0xf0u8) >> 4;
-                    if h > 9 || self.state.flags.cf {
-                        h = self.add_set_flags8(h, 6, flag_mask::ALL_FLAGS);
-                        h &= 0x0f;
+                    {
+                        let h: u8 = (res & 0xf0) >> 4;
+                        if h > 9 || self.state.flags.cf {
+                            res = self.add_set_flags8(res, 0x60, flag_mask::CF);
+                        }
                     }
 
-                    let res: u8 = (h << 4) + (dst_val & 0x0f);
+                    // trick to update accordingly all other flags
+                    self.add_set_flags8(res, 0, flag_mask::ALL_FLAGS & !flag_mask::AF & !flag_mask::CF);
+
                     self.set_reg8(dst_id, res);
                 }
 
