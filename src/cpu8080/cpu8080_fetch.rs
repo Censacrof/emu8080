@@ -552,7 +552,7 @@ where
 
                     let res = self.sub_set_flags8(
                         self.get_reg8(dst_id),
-                        u8::wrapping_sub(src_val, if self.state.flags.cf { 1 } else { 0 }),
+                        u8::wrapping_add(src_val, if self.state.flags.cf { 1 } else { 0 }),
                         flag_mask::ALL_FLAGS,
                     );
 

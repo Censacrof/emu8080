@@ -177,8 +177,7 @@ mod flag_mask {
     pub const ZF: u8 = 64;
     pub const SF: u8 = 128;    
 
-    pub const IS_SUB: u8 = 32;
-    pub const ALL_FLAGS: u8 = 0xff & !IS_SUB;
+    pub const ALL_FLAGS: u8 = 0xff;
     pub const NO_FLAGS: u8 = 0;
 }
 
@@ -233,9 +232,8 @@ where
             self.state.flags.pf = mod2sum == 0;
         }
 
-        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
-            self.state.flags.cf = (res16 & 0xff00u16 != 0) ^ is_sub;
+            self.state.flags.cf = res16 & 0xff00u16 != 0;
         }
 
         if affected_flags & flag_mask::AF != 0 {
@@ -269,9 +267,8 @@ where
             self.state.flags.pf = mod2sum == 0;
         }
 
-        let is_sub: bool = affected_flags & flag_mask::IS_SUB != 0;
         if affected_flags & flag_mask::CF != 0 {
-            self.state.flags.cf = (res32 & 0xffff0000u32 != 0) ^ is_sub;
+            self.state.flags.cf = res32 & 0xffff0000u32 != 0;
         }
 
         if affected_flags & flag_mask::AF != 0 {
@@ -285,14 +282,14 @@ where
 
     fn sub_set_flags8(&mut self, dst: u8, src: u8, affected_flags: u8) -> u8 {
         let compl_src: u8 = u8::wrapping_add(!src, 1u8);
-        let res = self.add_set_flags8(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags8(dst, compl_src, affected_flags);
         self.state.flags.cf = dst < src;
         return res;
     }
 
     fn sub_set_flags16(&mut self, dst: u16, src: u16, affected_flags: u8) -> u16 {
         let compl_src: u16 = u16::wrapping_add(!src, 1u16);
-        let res = self.add_set_flags16(dst, compl_src, affected_flags | flag_mask::IS_SUB);
+        let res = self.add_set_flags16(dst, compl_src, affected_flags);
         self.state.flags.cf = dst < src;
         return res;
     }
