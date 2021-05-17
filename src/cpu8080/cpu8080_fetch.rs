@@ -1353,5 +1353,6 @@ mod tests {
         }
 
         println!("\n\nProgram output:\n{}\n", program_output);
+        assert_eq!(program_output, "\u{c}\r\n CPU IS OPERATIONAL");
     }
 }
