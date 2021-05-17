@@ -698,16 +698,17 @@ where
                     let dst_val: u8 = self.get_reg8(dst_id);
                     let mut res: u8 = dst_val;
 
+                    let old_carry = self.state.flags.cf;
                     {
                         let l: u8 = res & 0x0f;
                         if l > 9 || self.state.flags.af {
-                            res = self.add_set_flags8(res, 0x06, flag_mask::AF);
+                            res = self.add_set_flags8(res, 0x06, flag_mask::AF | flag_mask::CF);
                         }
                     }
 
                     {
                         let h: u8 = (res & 0xf0) >> 4;
-                        if h > 9 || self.state.flags.cf {
+                        if h > 9 || self.state.flags.cf || old_carry {
                             res = self.add_set_flags8(res, 0x60, flag_mask::CF);
                         }
                     }
@@ -904,67 +905,83 @@ where
                     );
                 }
 
-                // RLC       00000111          C       Rotate A left
-                "00000111" => {
-                    let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tRLC {}", opcode, dst_id);
+                // ROTATE ACCUMULATOR INSTRUCTIONS
+                // RLC       o=00                C       Rotate A left
+                // RRC       o=01                C       Rotate A right
+                // RAL       o=10                C       Rotate A left through carry
+                // RAR       o=11                C       Rotate A right through carry
+                "000oo111" => {
+                    let dst_id = RegId8::A;
+                    let mne: String = match o {
+                        0 => "RLC".into(),
+                        1 => "RRC".into(),
+                        2 => "RAL".into(),
+                        3 => "RAR".into(),
+                        _ => panic!("This can't happen"),
+                    };
+                    mnemonic = format!("{:#04x}\t{} {}", opcode, mne, dst_id);
                     if !execute {
                         break;
                     }
 
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    self.state.flags.cf = dst_val & 0x80u8 != 0;
-                    let res = dst_val << 1;
+                    match o {
+                        // RLC
+                        0 => {
+                            let msb: bool = dst_val & 0x80 != 0;
+                            self.state.flags.cf = msb;
 
-                    self.set_reg8(dst_id, res);
-                }
+                            let res: u8 = (dst_val << 1) + msb as u8;
+                            self.set_reg8(
+                                dst_id,
+                                res
+                            );
+                        },
 
-                // RRC       00001111          C       Rotate A right
-                "00001111" => {
-                    let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tRRC {}", opcode, dst_id);
-                    if !execute {
-                        break;
+                        // RRC
+                        1 => {
+                            let lsb: bool = dst_val & 0x01 != 0;
+                            self.state.flags.cf = lsb;
+
+                            let res: u8 = (dst_val >> 1) + if lsb { 0x80 } else { 0 };
+                            self.set_reg8(
+                                dst_id,
+                                res
+                            );
+                        },
+
+                        // RAL
+                        2 => {
+                            let msb: bool = dst_val & 0x80 != 0;
+
+                            let old_carry: bool = self.state.flags.cf;
+                            self.state.flags.cf = msb;
+
+                            let res: u8 = (dst_val << 1) + old_carry as u8;
+                            self.set_reg8(
+                                dst_id,
+                                res
+                            );
+                        },
+
+                        // RAR
+                        3 => {
+                            let lsb: bool = dst_val & 0x01 != 0;
+
+                            let old_carry: bool = self.state.flags.cf;
+                            self.state.flags.cf = lsb;
+
+                            let res: u8 = (dst_val >> 1) + if old_carry { 0x80 } else { 0 } ;
+                            self.set_reg8(
+                                dst_id,
+                                res
+                            );
+                        },
+
+                        _ => {}
                     }
-
-                    let dst_val: u8 = self.get_reg8(dst_id);
-                    self.state.flags.cf = dst_val & 0x01u8 != 0;
-                    let res = dst_val >> 1;
-
-                    self.set_reg8(dst_id, res);
                 }
 
-                // RAL       00010111          C       Rotate A left through carry
-                "00010111" => {
-                    let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tRAL {}", opcode, dst_id);
-                    if !execute {
-                        break;
-                    }
-
-                    let dst_val: u8 = self.get_reg8(dst_id);
-                    let old_carry = self.state.flags.cf;
-                    self.state.flags.cf = dst_val & 0x80u8 != 0;
-                    let res = dst_val << 1 + if old_carry { 1 } else { 0 };
-
-                    self.set_reg8(dst_id, res);
-                }
-
-                // RAR       00011111          C       Rotate A right through carry
-                "00011111" => {
-                    let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tRAR {}", opcode, dst_id);
-                    if !execute {
-                        break;
-                    }
-
-                    let dst_val: u8 = self.get_reg8(dst_id);
-                    let old_carry = self.state.flags.cf;
-                    self.state.flags.cf = dst_val & 0x01u8 != 0;
-                    let res = dst_val >> 1 + if old_carry { 0x80u8 } else { 0 };
-
-                    self.set_reg8(dst_id, res);
-                }
 
                 // CMA       00101111          -       Compliment A
                 "00101111" => {
