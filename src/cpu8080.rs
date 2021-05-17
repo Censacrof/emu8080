@@ -46,6 +46,18 @@ impl From<Reg8> for FlagReg {
     }
 }
 
+impl fmt::Display for FlagReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}{}{}",
+            if self.cf { "C" } else { "c" },
+            if self.pf { "P" } else { "p" },
+            if self.af { "A" } else { "a" },
+            if self.zf { "Z" } else { "z" },
+            if self.sf { "S" } else { "s" },
+        )
+    }
+}
+
 #[derive(Copy, Clone, Default, Debug)]
 struct Reg8Pair {
     h: Reg8,
@@ -122,6 +134,21 @@ struct Cpu8080State {
     flags: FlagReg,
 
     interrutpions_enabled: bool,
+}
+
+impl fmt::Display for Cpu8080State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "A: {:#04x}; BC: {:#06x}; DE: {:#06x}; HL: {:#06x}; PC: {:#06x}; SP: {:#06x}; F: {}; IE: {};",
+            self.reg_a,
+            u16::from(self.reg_bc),
+            u16::from(self.reg_de),
+            u16::from(self.reg_hl),
+            u16::from(self.reg_pc),
+            u16::from(self.reg_sp),
+            self.flags,
+            self.interrutpions_enabled,
+        )
+    }
 }
 
 trait IOBus {

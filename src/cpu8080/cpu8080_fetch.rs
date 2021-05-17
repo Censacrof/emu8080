@@ -754,7 +754,7 @@ where
                     let res: u8 = self.get_reg8(dst_id) & src_val;
 
                     // trick to update accordingly all flags
-                    self.add_set_flags8(res, src_val, flag_mask::ALL_FLAGS);
+                    self.add_set_flags8(res, 0, flag_mask::ALL_FLAGS);
 
                     // this instruction resets CF and AF
                     self.state.flags.cf = false;
@@ -1289,10 +1289,12 @@ mod tests {
             cpu.addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
         }
 
+        let mut log_instructions = true;
         let mut program_output: String = "".into();
         cpu.state.reg_pc = FIRST_ADDR as u16;
-        for i in 0..256 {
-            let curr_pc = cpu.state.reg_pc;
+        loop {
+            let curr_state = cpu.state;
+            let curr_pc = curr_state.reg_pc;
 
             if curr_pc == 0x0005 {
                 match cpu.state.reg_bc.l {
@@ -1308,9 +1310,14 @@ mod tests {
                             i += 1;
                             program_output = format!("{}{}", program_output, c);
                         }
-                    }
+                    }                    
                     _ => {}
                 };
+            }
+
+            // CPUER address
+            if curr_pc == 0x0689 {
+                log_instructions = false;
             }
 
             if curr_pc == 0x0000 {
@@ -1318,7 +1325,9 @@ mod tests {
             }
 
             let mne: String = cpu.fetch_and_execute(true).unwrap();
-            println!("{:#06x}|\t{}", curr_pc, mne);
+            if log_instructions {
+                println!("{:#06x}|{:30}{}", curr_pc, mne, curr_state);
+            }
         }
 
         println!("\n\nProgram output:\n{}\n", program_output);
