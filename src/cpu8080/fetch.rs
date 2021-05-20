@@ -219,6 +219,7 @@ impl Cpu8080 {
     pub fn fetch_and_execute<MemMapT: MemoryMap, IOBusT: IOBus>(
         &mut self,
         execute: bool,
+        return_mnemonic: bool,
         addr_space: &mut MemMapT,
         io_space: &mut IOBusT,
     ) -> Result<String, MemoryMapError> {
@@ -241,7 +242,9 @@ impl Cpu8080 {
                 // HLT
                 "01110110" => {
                     // 0x76
-                    mnemonic = format!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -251,7 +254,9 @@ impl Cpu8080 {
                 "01dddsss" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -287,7 +292,9 @@ impl Cpu8080 {
                 "00ddd110" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tMVI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tMVI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -311,7 +318,9 @@ impl Cpu8080 {
                 "00pp0001" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
                     let src_val: u16 = self.consume16(addr_space)?;
-                    mnemonic = format!("{:#04x}\tLXI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLXI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -323,7 +332,9 @@ impl Cpu8080 {
                 "00111010" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_addr: u16 = self.consume16(addr_space)?;
-                    mnemonic = format!("{:#04x}\tLDA {}, {}", opcode, dst_id, src_addr);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLDA {}, {}", opcode, dst_id, src_addr);
+                    }
                     if !execute {
                         break;
                     }
@@ -336,7 +347,9 @@ impl Cpu8080 {
                 "00110010" => {
                     let dst_addr: u16 = self.consume16(addr_space)?;
                     let src_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tSTA {}, {}", opcode, dst_addr, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTA {}, {}", opcode, dst_addr, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -349,7 +362,9 @@ impl Cpu8080 {
                 "00101010" => {
                     let dst_id: RegId16 = RegId16::HL;
                     let src_addr: u16 = self.consume16(addr_space)?;
-                    mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
+                    }
                     if !execute {
                         break;
                     }
@@ -362,7 +377,9 @@ impl Cpu8080 {
                 "00100010" => {
                     let dst_addr: u16 = self.consume16(addr_space)?;
                     let src_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tSHLD {}, {}", opcode, dst_addr, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSHLD {}, {}", opcode, dst_addr, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -379,7 +396,9 @@ impl Cpu8080 {
                         RegId16::BC | RegId16::DE => {}
                         _ => panic!("Invalid src operand ({})", src_id),
                     }
-                    mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -397,7 +416,9 @@ impl Cpu8080 {
                         RegId16::BC | RegId16::DE => {}
                         _ => panic!("Invalid src operand ({})", src_id),
                     }
-                    mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -411,7 +432,9 @@ impl Cpu8080 {
                 "11101011" => {
                     let dst_id = RegId16::DE;
                     let src_id = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -425,7 +448,9 @@ impl Cpu8080 {
                 "10000sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tADD {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADD {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -448,7 +473,9 @@ impl Cpu8080 {
                 "11000110" => {
                     let dst_id = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -463,7 +490,9 @@ impl Cpu8080 {
                 "10001sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tADC {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADC {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -489,7 +518,9 @@ impl Cpu8080 {
                 "11001110" => {
                     let dst_id = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -507,7 +538,9 @@ impl Cpu8080 {
                 "10010sss" => {
                     let dst_id = RegId8::A;
                     let src_id = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tSUB {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSUB {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -530,7 +563,9 @@ impl Cpu8080 {
                 "11010110" => {
                     let dst_id = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -545,7 +580,9 @@ impl Cpu8080 {
                 "10011sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tSBB {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSBB {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -571,7 +608,9 @@ impl Cpu8080 {
                 "11011110" => {
                     let dst_id = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tSBI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSBI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -588,7 +627,9 @@ impl Cpu8080 {
                 // INR D     00DDD100          ZSPA    Increment register
                 "00ddd100" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
-                    mnemonic = format!("{:#04x}\tINR {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINR {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -619,7 +660,9 @@ impl Cpu8080 {
                 // DCR D     00DDD101          ZSPA    Decrement register
                 "00ddd101" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
-                    mnemonic = format!("{:#04x}\tDCR {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDCR {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -650,7 +693,9 @@ impl Cpu8080 {
                 // INX PP    00PP0011          -       Increment register pair
                 "00pp0011" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tINX {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINX {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -665,7 +710,9 @@ impl Cpu8080 {
                 // DCX PP    00PP1011          -       Decrement register pair
                 "00pp1011" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tDCX {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDCX {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -681,7 +728,9 @@ impl Cpu8080 {
                 "00pp1001" => {
                     let dst_id = RegId16::HL;
                     let src_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tDAD {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDAD {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -698,7 +747,9 @@ impl Cpu8080 {
                 // DAA       00100111          ZSPCA   Decimal Adjust accumulator
                 "00100111" => {
                     let dst_id = RegId8::A;
-                    mnemonic = format!("{:#04x}\tDAA", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDAA", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -735,7 +786,9 @@ impl Cpu8080 {
                 "10100sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tANA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tANA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -763,7 +816,9 @@ impl Cpu8080 {
                 "11100110" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tANI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tANI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -784,7 +839,9 @@ impl Cpu8080 {
                 "10110sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tORA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tORA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -812,7 +869,9 @@ impl Cpu8080 {
                 "11110110" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tORI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tORI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -832,7 +891,9 @@ impl Cpu8080 {
                 "10101sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tXRA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXRA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -861,7 +922,9 @@ impl Cpu8080 {
                 "11101110" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tXRI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXRI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -881,7 +944,9 @@ impl Cpu8080 {
                 "10111sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tCMP {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMP {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -902,7 +967,9 @@ impl Cpu8080 {
                 "11111110" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tCPI {}, ${}", opcode, dst_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCPI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -926,7 +993,9 @@ impl Cpu8080 {
                         3 => "RAR".into(),
                         _ => panic!("This can't happen"),
                     };
-                    mnemonic = format!("{:#04x}\t{} {}", opcode, mne, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\t{} {}", opcode, mne, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -980,7 +1049,9 @@ impl Cpu8080 {
                 // CMA       00101111          -       Compliment A
                 "00101111" => {
                     let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tCMA {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMA {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -991,7 +1062,9 @@ impl Cpu8080 {
 
                 // CMC       00111111          C       Compliment Carry flag
                 "00111111" => {
-                    mnemonic = format!("{:#04x}\tCMC", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMC", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1001,7 +1074,9 @@ impl Cpu8080 {
 
                 // STC       00110111          C       Set Carry flag
                 "00110111" => {
-                    mnemonic = format!("{:#04x}\tSTC", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTC", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1012,7 +1087,9 @@ impl Cpu8080 {
                 // JMP a     11000011 lb hb    -       Unconditional jump
                 "11000011" => {
                     let src_val: u16 = self.consume16(addr_space)?;
-                    mnemonic = format!("{:#04x}\tJMP ${:#06x}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tJMP ${:#06x}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1024,7 +1101,9 @@ impl Cpu8080 {
                 "11ccc010" => {
                     let src_val: u16 = self.consume16(addr_space)?;
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tJ{} ${:#06x}", opcode, cond_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tJ{} ${:#06x}", opcode, cond_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1037,7 +1116,9 @@ impl Cpu8080 {
                 // CALL a    11001101 lb hb    -       Unconditional subroutine call
                 "11001101" => {
                     let src_val: u16 = self.consume16(addr_space)?;
-                    mnemonic = format!("{:#04x}\tCALL ${:#06x}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCALL ${:#06x}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1053,7 +1134,9 @@ impl Cpu8080 {
                 "11ccc100" => {
                     let src_val: u16 = self.consume16(addr_space)?;
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tCALL{} ${:#06x}", opcode, cond_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCALL{} ${:#06x}", opcode, cond_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1069,7 +1152,9 @@ impl Cpu8080 {
 
                 // RET       11001001          -       Unconditional return from subroutine
                 "11001001" => {
-                    mnemonic = format!("{:#04x}\tRET", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRET", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1080,7 +1165,9 @@ impl Cpu8080 {
                 // Rccc      11CCC000          -       Conditional return from subroutine
                 "11ccc000" => {
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tRET{}", opcode, cond_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRET{}", opcode, cond_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1093,7 +1180,9 @@ impl Cpu8080 {
                 // RST n     11NNN111          -       Restart (Call n*8)
                 "11nnn111" => {
                     let src_val = n as u16; // n * 8
-                    mnemonic = format!("{:#04x}\tRST{}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRST{}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1108,7 +1197,9 @@ impl Cpu8080 {
                 // PCHL      11101001          -       Jump to address in H:L
                 "11101001" => {
                     let src_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tPCHL {}", opcode, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPCHL {}", opcode, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1124,7 +1215,9 @@ impl Cpu8080 {
                         _ => format!("{}", src_id),
                     };
 
-                    mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
+                    }
                     if !execute {
                         break;
                     }
@@ -1150,7 +1243,9 @@ impl Cpu8080 {
                         _ => format!("{}", dst_id),
                     };
 
-                    mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_mne);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_mne);
+                    }
                     if !execute {
                         break;
                     }
@@ -1168,7 +1263,9 @@ impl Cpu8080 {
                 // XTHL      11100011          -       Swap H:L with top word on stack
                 "11100011" => {
                     let dst_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tXTHL {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXTHL {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1182,7 +1279,9 @@ impl Cpu8080 {
                 // SPHL      11111001          -       Set SP to content of H:L
                 "11111001" => {
                     let dst_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tSPHL {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSPHL {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1193,7 +1292,9 @@ impl Cpu8080 {
                 // IN p      11011011 pa       -       Read input port into A
                 "11011011" => {
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tIN ${}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tIN ${}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1205,7 +1306,9 @@ impl Cpu8080 {
                 // OUT p     11010011 pa       -       Write A to output port
                 "11010011" => {
                     let src_val: u8 = self.consume8(addr_space)?;
-                    mnemonic = format!("{:#04x}\tOUT ${}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tOUT ${}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1216,7 +1319,9 @@ impl Cpu8080 {
 
                 // EI        11111011          -       Enable interrupts
                 "11111011" => {
-                    mnemonic = format!("{:#04x}\tEI", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tEI", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1226,7 +1331,9 @@ impl Cpu8080 {
 
                 // DI        11110011          -       Disable interrupts
                 "11110011" => {
-                    mnemonic = format!("{:#04x}\tDI", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDI", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1236,7 +1343,9 @@ impl Cpu8080 {
 
                 // NOP       00000000          -       No operation
                 "00000000" => {
-                    mnemonic = format!("{:#04x}\tNOP", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tNOP", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1244,7 +1353,9 @@ impl Cpu8080 {
 
                 _ => {
                     // unimplemented_instruction!(opcode);
-                    mnemonic = format!("{:#04x}\tINVALID INSTRUCTION", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINVALID INSTRUCTION", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1276,7 +1387,7 @@ mod tests {
             addr_space.buff[cpu.state.reg_pc as usize] = i;
 
             let mnemonic = cpu
-                .fetch_and_execute(true, &mut addr_space, &mut io_space)
+                .fetch_and_execute(true, true, &mut addr_space, &mut io_space)
                 .unwrap();
             println!("{}", mnemonic);
         }
@@ -1344,7 +1455,7 @@ mod tests {
             }
 
             let mne: String = cpu
-                .fetch_and_execute(true, &mut addr_space, &mut io_space)
+                .fetch_and_execute(true, true, &mut addr_space, &mut io_space)
                 .unwrap();
             if log_instructions {
                 println!("{:#06x}|{:30}{}", curr_pc, mne, curr_state);
@@ -1353,5 +1464,31 @@ mod tests {
 
         println!("\n\nProgram output:\n{}\n", program_output);
         assert_eq!(program_output, "\u{c}\r\n CPU IS OPERATIONAL");
+    }
+
+    
+    #[test]    
+    fn test_cpu_frequency() {
+        let mut cpu = Cpu8080::new();
+        let mut addr_space = TestMemory { buff: [0; 65536] };
+        let mut io_space = TestIOBus {};
+        
+        cpu.state.reg_sp = 1000;
+
+        let n_cycles = 10_000_000;
+        let starting_instant = time::Instant::now();
+        for _i in 0..n_cycles {
+            cpu.state.reg_pc = 0;
+            addr_space.buff[cpu.state.reg_pc as usize] = 0; // NOP because is a one cycle instruction
+            cpu.fetch_and_execute(true, false, &mut addr_space, &mut io_space).unwrap();
+        }
+
+        let ellapsed = starting_instant.elapsed();
+
+        println!("No. of cycles: {}\nTime ellapsed: {} ms\nAverage frequency: {} Hz",
+            n_cycles,
+            ellapsed.as_millis(),
+            (n_cycles as f64) / ellapsed.as_secs_f64(),
+        );
     }
 }
