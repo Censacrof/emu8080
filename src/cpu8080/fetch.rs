@@ -222,7 +222,14 @@ impl Cpu8080 {
         addr_space: &mut MemMapT,
         io_space: &mut IOBusT,
     ) -> Result<String, MemoryMapError> {
-        let opcode: u8 = self.consume8(addr_space)?;
+        let opcode: u8 = if self.state.interrupt_enabled && self.state.interrupt_request {
+            self.state.interrupt_request = false;
+            self.state.interrupt_enabled = false;
+            self.state.interrupt_opcode
+        }
+        else {
+            self.consume8(addr_space)?
+        };
 
         #[allow(unused_assignments)]
         let mut mnemonic: String = format!("{:#04x}", opcode);
@@ -1214,7 +1221,7 @@ impl Cpu8080 {
                         break;
                     }
 
-                    self.state.interrutpions_enabled = true;
+                    self.state.interrupt_enabled = true;
                 }
 
                 // DI        11110011          -       Disable interrupts
@@ -1224,7 +1231,7 @@ impl Cpu8080 {
                         break;
                     }
 
-                    self.state.interrutpions_enabled = false;
+                    self.state.interrupt_enabled = false;
                 }
 
                 // NOP       00000000          -       No operation

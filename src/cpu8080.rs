@@ -6,12 +6,12 @@ type Reg8 = u8;
 type Reg16 = u16;
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
-struct FlagReg {
-    zf: bool,
-    sf: bool,
-    pf: bool,
-    cf: bool,
-    af: bool,
+pub struct FlagReg {
+    pub zf: bool,
+    pub sf: bool,
+    pub pf: bool,
+    pub cf: bool,
+    pub af: bool,
 }
 
 impl FlagReg {
@@ -71,9 +71,9 @@ impl fmt::Display for FlagReg {
 }
 
 #[derive(Copy, Clone, Default, Debug)]
-struct Reg8Pair {
-    h: Reg8,
-    l: Reg8,
+pub struct Reg8Pair {
+    pub h: Reg8,
+    pub l: Reg8,
 }
 
 impl From<Reg16> for Reg8Pair {
@@ -129,23 +129,25 @@ pub trait MemoryMap {
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Cpu8080State {
     // accumulator
-    reg_a: Reg8,
+    pub reg_a: Reg8,
 
     // general purpose registers
-    reg_bc: Reg8Pair,
-    reg_de: Reg8Pair,
-    reg_hl: Reg8Pair,
+    pub reg_bc: Reg8Pair,
+    pub reg_de: Reg8Pair,
+    pub reg_hl: Reg8Pair,
 
     // program counter
-    reg_pc: Reg16,
+    pub reg_pc: Reg16,
 
     // stack pointer
-    reg_sp: Reg16,
+    pub reg_sp: Reg16,
 
     // flag registers
-    flags: FlagReg,
+    pub flags: FlagReg,
 
-    interrutpions_enabled: bool,
+    pub interrupt_enabled: bool,
+    pub interrupt_request: bool,
+    pub interrupt_opcode: u8,
 }
 
 impl fmt::Display for Cpu8080State {
@@ -158,7 +160,7 @@ impl fmt::Display for Cpu8080State {
             u16::from(self.reg_pc),
             u16::from(self.reg_sp),
             self.flags,
-            self.interrutpions_enabled,
+            self.interrupt_enabled,
         )
     }
 }
@@ -169,7 +171,7 @@ pub trait IOBus {
 }
 
 pub struct Cpu8080 {
-    state: Cpu8080State,
+    pub state: Cpu8080State,
 }
 
 mod flag_mask {
@@ -192,6 +194,20 @@ impl Cpu8080 {
 
     pub fn reset(&mut self) {
         self.state.reg_pc = 0u16.into();
+    }
+
+    pub fn interrupt(&mut self, opcode: u8) {
+        self.state.interrupt_request = true;
+        self.state.interrupt_opcode = opcode;
+    }
+
+    pub fn interrupt_rst(&mut self, routine_number: u8) {
+        if routine_number >= 8 {
+            panic!("routine number must be less than 8");
+        }
+
+        // opcode = 11nnn111
+        self.interrupt((routine_number << 3) | 0xc7);
     }
 
     fn consume8<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u8, MemoryMapError> {
