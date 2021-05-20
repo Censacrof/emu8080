@@ -197,6 +197,10 @@ impl Cpu8080 {
     }
 
     pub fn interrupt(&mut self, opcode: u8) {
+        if !self.state.interrupt_enabled {
+            return;
+        }
+        
         self.state.interrupt_request = true;
         self.state.interrupt_opcode = opcode;
     }
