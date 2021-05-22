@@ -18,9 +18,32 @@ const WND_HEIGHT: u32 = N_WIDTH * PX_SIZE;
 const VRAM_OFFSET: usize = 0x2400;
 const VRAM_END: usize = 0x4000;
 const VRAM_BUFF_LEN: usize = VRAM_END - VRAM_OFFSET;
+
+struct SendPtr<T> {
+    ptr: *mut T,
+}
+unsafe impl<T> Send for SendPtr<T> {}
+unsafe impl<T> Sync for SendPtr<T> {}
+impl<T> SendPtr<T> {
+    fn new(ptr: *mut T) -> SendPtr<T> {
+        return SendPtr { ptr: ptr };
+    }
+}
+
+
+struct VramBuff {
+    buff: [u8; VRAM_BUFF_LEN],
+}
+
+impl VramBuff {
+    fn new() -> VramBuff {
+        VramBuff { buff: [0; VRAM_BUFF_LEN], }
+    }
+}
+
 pub struct InvadersMemoryMap {
     ram: [u8; 65536],
-    vram: Arc<RwLock<Box<[u8; VRAM_BUFF_LEN]>>>,
+    vram: Box<VramBuff>,
 }
 
 
@@ -34,9 +57,8 @@ impl MemoryMap for InvadersMemoryMap {
         self.ram[addr as usize] = b;
 
         if addr >= VRAM_OFFSET as u16 && addr < VRAM_END as u16 {
-            let mut buff_guard = self.vram.write().unwrap();
             let buff_index: usize = addr as usize - VRAM_OFFSET;
-            buff_guard[buff_index] = b;
+            self.vram.buff[buff_index] = b;
         }
 
         return Ok(());
@@ -58,10 +80,9 @@ impl MemoryMap for InvadersMemoryMap {
         self.ram[addr_i + 1] = h;
 
         if addr >= VRAM_OFFSET as u16 && addr < VRAM_END as u16 {
-            let mut bugg_guard = self.vram.write().unwrap();
             let buff_index: usize = addr as usize - VRAM_OFFSET;
-            bugg_guard[buff_index] = l;
-            bugg_guard[buff_index + 1] = h;
+            self.vram.buff[buff_index] = l;
+            self.vram.buff[buff_index + 1] = h;
         }
 
         return Ok(());
@@ -115,7 +136,7 @@ const ROM_F: &[u8] = include_bytes!("ROM/invaders.f");
 const ROM_E: &[u8] = include_bytes!("ROM/invaders.e");
 
 pub struct InvadersMachine {
-    pub cpu: Arc<RwLock<Cpu8080>>,
+    pub cpu: Cpu8080,
     pub addr_space: InvadersMemoryMap,
     pub io_space: InvadersIOBus,
 }
@@ -124,18 +145,17 @@ pub struct InvadersMachine {
 impl InvadersMachine {
     pub fn new() -> InvadersMachine {
         InvadersMachine {
-            cpu: Arc::new(RwLock::new(Cpu8080::new())),
+            cpu: Cpu8080::new(),
             addr_space: InvadersMemoryMap { 
                 ram: [0x00; 65536],
-                vram: Arc::new(RwLock::new(Box::new([0; VRAM_BUFF_LEN]))),
+                vram: Box::new(VramBuff::new()),
             },
             io_space: Default::default(),
         }
     }
 
     pub fn boot(&mut self) -> Result<(), String> {
-        self.cpu.write().unwrap()
-            .state.interrupt_enabled = false;
+        self.cpu.state.interrupt_enabled = false;
 
         // load the rom
         for i in 0..ROM_H.len() {
@@ -154,11 +174,12 @@ impl InvadersMachine {
             self.addr_space.ram[0x1800 + i] = ROM_E[i];
         }        
 
-        let vram = self.addr_space.vram.clone();
-        let cpu = self.cpu.clone();
-
+        
         let must_quit_ref = Arc::new(RwLock::new(false));
         let must_quit_display = must_quit_ref.clone();
+
+        let vram_ptr: SendPtr<VramBuff> = SendPtr::new(&mut (*self.addr_space.vram));
+        let cpu_ptr: SendPtr<Cpu8080> = SendPtr::new(&mut self.cpu);
 
         thread::spawn(move || {
             let sdl_context = sdl2::init().unwrap();
@@ -203,11 +224,12 @@ impl InvadersMachine {
                     }
                 }
 
-                cpu.write().unwrap().interrupt_rst(next_interrupt_type);
+                unsafe {
+                    (*cpu_ptr.ptr).interrupt_rst(next_interrupt_type);
+                }
                 next_interrupt_type = if next_interrupt_type == 1 { 2 } else { 1 };
                 
 
-                let vram_guard = vram.write().unwrap();
                 tex.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                     let mut pixel_count: usize = 0;
                     for y in 0..N_HEIGHT as usize {
@@ -219,7 +241,8 @@ impl InvadersMachine {
                             
                             let vram_offset = pixel_count >> 3; // fast division by 8
                             let vram_bit = pixel_count & 0x07;  // fast mod by 8
-                            let val: u8 = if (vram_guard[vram_offset] >> vram_bit) & 0x01 != 0 { 0xff } else { 0x00 };
+                            let val: u8 = unsafe { if ((*vram_ptr.ptr).buff[vram_offset] >> vram_bit) & 0x01 != 0 { 0xff } else { 0x00 } };
+                            
 
                             buffer[buff_offset + 0] = val;   // B
                             buffer[buff_offset + 1] = val;   // G
@@ -238,14 +261,18 @@ impl InvadersMachine {
                 ).unwrap();
                 canvas.present();
 
-                ::std::thread::sleep(Duration::from_millis(17));
+                thread::sleep(Duration::from_millis(7));
             }
         });
 
-
+        // let frame_time = Duration::from_nanos(500);
         while *must_quit_ref.read().unwrap() == false {
-            self.cpu.write().unwrap()
-                .fetch_and_execute(true, false, &mut self.addr_space, &mut self.io_space).unwrap();            
+            let cycle_start = Instant::now();
+            self.cpu.fetch_and_execute(true, false, &mut self.addr_space, &mut self.io_space).unwrap();
+
+            // let ellapsed = cycle_start.elapsed();
+            // thread::sleep(if ellapsed < frame_time { frame_time - ellapsed } else { Duration::from_millis(0) });
+            // println!("{:?}", ellapsed);
         }
 
         Ok(())
