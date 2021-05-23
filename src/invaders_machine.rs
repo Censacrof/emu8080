@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use std::sync::RwLock;
 use std::thread;
 use std::sync::Arc;
+use sdl2::keyboard::*;
 
 const N_WIDTH: u32 = 256;
 const N_HEIGHT: u32 = 224;
@@ -94,16 +95,38 @@ impl MemoryMap for InvadersMemoryMap {
 pub struct InvadersIOBus {
     reg_shift: u16,
     reg_shift_offset: u8,
+    reg_input1: Arc<RwLock<u8>>,
+    reg_input2: Arc<RwLock<u8>>,
 }
 
-const IO_SHIFT_OFFSET: u8 = 2;
-const IO_SHIFT_READ: u8 = 3;
-const IO_SHIFT_DATA: u8 = 4;
+
+enum InReg1Bits{
+    CoinActiveLow = 0,
+    P2Start = 1,
+    P1Start = 2,
+    P1Shot = 4,
+    P1Left = 5,
+    P1Right = 6,
+}
+
+enum InReg2Bits {
+    P2Shot = 4,
+    P2Left = 5,
+    P2Right = 6,
+}
+
+
+const OUT_SHIFT_OFFSET: u8 = 2;
+const OUT_SHIFT_DATA: u8 = 4;
+
+const IN_REG_INPUT1: u8 = 1;
+const IN_REG_INPUT2: u8 = 2;
+const IN_SHIFT_READ: u8 = 3;
 
 impl IOBus for InvadersIOBus {  
     fn in_port(&mut self, port: u8) -> u8 {
         match port {
-            IO_SHIFT_READ => {
+            IN_SHIFT_READ => {
                 if self.reg_shift_offset > 8 {
                     0
                 }
@@ -111,16 +134,19 @@ impl IOBus for InvadersIOBus {
                     ((self.reg_shift >> (8 - self.reg_shift_offset)) & 0x00ff) as u8
                 }                
             },
+
+            IN_REG_INPUT1 => { *self.reg_input1.read().unwrap() }
+            IN_REG_INPUT2 => { *self.reg_input2.read().unwrap() }
             _ => { 0 },
         }
     }
 
     fn out_port(&mut self, port: u8, data: u8) {
         match port {
-            IO_SHIFT_OFFSET => {
+            OUT_SHIFT_OFFSET => {
                 self.reg_shift_offset = data;
             },
-            IO_SHIFT_DATA => {
+            OUT_SHIFT_DATA => {
                 self.reg_shift >>= 8;
                 self.reg_shift += (data as u16) << 8;
             }
@@ -177,6 +203,8 @@ impl InvadersMachine {
         
         let must_quit_ref = Arc::new(RwLock::new(false));
         let must_quit_display = must_quit_ref.clone();
+        let mut reg_input1 = self.io_space.reg_input1.clone();
+        let mut reg_input2 = self.io_space.reg_input2.clone();
 
         let vram_ptr: SendPtr<VramBuff> = SendPtr::new(&mut (*self.addr_space.vram));
         let cpu_ptr: SendPtr<Cpu8080> = SendPtr::new(&mut self.cpu);
@@ -212,19 +240,51 @@ impl InvadersMachine {
             while *must_quit_display.read().unwrap() == false {
                 let cycle_start = Instant::now();
 
+                let mut new_input1: u8 = 0;
+                let mut new_input2: u8 = 0;
+
+                new_input1 |= 1 << InReg1Bits::CoinActiveLow as u8;
+
                 for event in event_pump.poll_iter() {
                     match event {
-                        Event::Quit { .. }
-                        | Event::KeyDown {
+                        Event::Quit { .. } | Event::KeyDown {
                             keycode: Some(Keycode::Escape),
                             ..
+
                         } => { 
                             let mut w = must_quit_display.write().unwrap();
                             *w = true;
                         },
+
                         _ => {}
                     }
                 }
+
+                let key_state = event_pump.keyboard_state();
+
+                if key_state.is_scancode_pressed(Scancode::Num0) {
+                    new_input1 &= !(1 << InReg1Bits::CoinActiveLow as u8);
+                }
+
+                if key_state.is_scancode_pressed(Scancode::Num1) {
+                    new_input1 |= 1 << InReg1Bits::P1Start as u8;
+                }
+
+                if key_state.is_scancode_pressed(Scancode::Left) {
+                    new_input1 |= 1 << InReg1Bits::P1Left as u8;
+                }
+
+                if key_state.is_scancode_pressed(Scancode::Right) {
+                    new_input1 |= 1 << InReg1Bits::P1Right as u8;
+                }
+
+                if key_state.is_scancode_pressed(Scancode::Space) {
+                    new_input1 |= 1 << InReg1Bits::P1Shot as u8;
+                }
+
+
+                *reg_input1.write().unwrap() = new_input1;
+                *reg_input2.write().unwrap() = new_input2;
 
                 unsafe {
                     (*cpu_ptr.ptr).interrupt_rst(next_interrupt_type);
@@ -239,7 +299,7 @@ impl InvadersMachine {
                             let tx = y;
                             let ty = (N_WIDTH - 1) as usize - x;
 
-                            let buff_offset = ty * pitch + tx * 4;
+                            let buff_offset = ty * pitch + (tx << 2);
                             
                             let vram_offset = pixel_count >> 3; // fast division by 8
                             let vram_bit = pixel_count & 0x07;  // fast mod by 8
