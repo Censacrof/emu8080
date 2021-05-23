@@ -210,6 +210,8 @@ impl InvadersMachine {
             let mut next_interrupt_type = 1u8;
 
             while *must_quit_display.read().unwrap() == false {
+                let cycle_start = Instant::now();
+
                 for event in event_pump.poll_iter() {
                     match event {
                         Event::Quit { .. }
@@ -261,18 +263,23 @@ impl InvadersMachine {
                 ).unwrap();
                 canvas.present();
 
-                thread::sleep(Duration::from_millis(7));
+                loop {
+                    if cycle_start.elapsed() >= Duration::from_millis(7) {
+                        break;
+                    }
+                }
             }
         });
 
-        // let frame_time = Duration::from_nanos(500);
         while *must_quit_ref.read().unwrap() == false {
             let cycle_start = Instant::now();
             self.cpu.fetch_and_execute(true, false, &mut self.addr_space, &mut self.io_space).unwrap();
 
-            // let ellapsed = cycle_start.elapsed();
-            // thread::sleep(if ellapsed < frame_time { frame_time - ellapsed } else { Duration::from_millis(0) });
-            // println!("{:?}", ellapsed);
+            loop {
+                if cycle_start.elapsed() >= Duration::from_nanos(500) {
+                    break;
+                }
+            }
         }
 
         Ok(())
