@@ -6,12 +6,12 @@ type Reg8 = u8;
 type Reg16 = u16;
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
-struct FlagReg {
-    zf: bool,
-    sf: bool,
-    pf: bool,
-    cf: bool,
-    af: bool,
+pub struct FlagReg {
+    pub zf: bool,
+    pub sf: bool,
+    pub pf: bool,
+    pub cf: bool,
+    pub af: bool,
 }
 
 impl FlagReg {
@@ -24,11 +24,21 @@ impl From<FlagReg> for Reg8 {
     fn from(item: FlagReg) -> Self {
         let mut res: Self = 0x02;
 
-        if item.cf { res |= flag_mask::CF }
-        if item.pf { res |= flag_mask::PF }
-        if item.af { res |= flag_mask::AF }
-        if item.zf { res |= flag_mask::ZF }
-        if item.sf { res |= flag_mask::SF }
+        if item.cf {
+            res |= flag_mask::CF
+        }
+        if item.pf {
+            res |= flag_mask::PF
+        }
+        if item.af {
+            res |= flag_mask::AF
+        }
+        if item.zf {
+            res |= flag_mask::ZF
+        }
+        if item.sf {
+            res |= flag_mask::SF
+        }
 
         return res;
     }
@@ -48,7 +58,9 @@ impl From<Reg8> for FlagReg {
 
 impl fmt::Display for FlagReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}{}{}",
+        write!(
+            f,
+            "{}{}{}{}{}",
             if self.cf { "C" } else { "c" },
             if self.pf { "P" } else { "p" },
             if self.af { "A" } else { "a" },
@@ -59,9 +71,9 @@ impl fmt::Display for FlagReg {
 }
 
 #[derive(Copy, Clone, Default, Debug)]
-struct Reg8Pair {
-    h: Reg8,
-    l: Reg8,
+pub struct Reg8Pair {
+    pub h: Reg8,
+    pub l: Reg8,
 }
 
 impl From<Reg16> for Reg8Pair {
@@ -97,7 +109,7 @@ impl ops::AddAssign for Reg8Pair {
 }
 
 #[derive(Debug)]
-enum MemoryMapError {}
+pub enum MemoryMapError {}
 impl fmt::Display for MemoryMapError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Memory Map Error")
@@ -106,7 +118,7 @@ impl fmt::Display for MemoryMapError {
 
 impl error::Error for MemoryMapError {}
 
-trait MemoryMap {
+pub trait MemoryMap {
     fn read_b(&self, addr: u16) -> Result<u8, MemoryMapError>;
     fn write_b(&mut self, addr: u16, b: u8) -> Result<(), MemoryMapError>;
 
@@ -115,25 +127,27 @@ trait MemoryMap {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-struct Cpu8080State {
+pub struct Cpu8080State {
     // accumulator
-    reg_a: Reg8,
+    pub reg_a: Reg8,
 
     // general purpose registers
-    reg_bc: Reg8Pair,
-    reg_de: Reg8Pair,
-    reg_hl: Reg8Pair,
+    pub reg_bc: Reg8Pair,
+    pub reg_de: Reg8Pair,
+    pub reg_hl: Reg8Pair,
 
     // program counter
-    reg_pc: Reg16,
+    pub reg_pc: Reg16,
 
     // stack pointer
-    reg_sp: Reg16,
+    pub reg_sp: Reg16,
 
     // flag registers
-    flags: FlagReg,
+    pub flags: FlagReg,
 
-    interrutpions_enabled: bool,
+    pub interrupt_enabled: bool,
+    pub interrupt_request: bool,
+    pub interrupt_opcode: u8,
 }
 
 impl fmt::Display for Cpu8080State {
@@ -146,28 +160,18 @@ impl fmt::Display for Cpu8080State {
             u16::from(self.reg_pc),
             u16::from(self.reg_sp),
             self.flags,
-            self.interrutpions_enabled,
+            self.interrupt_enabled,
         )
     }
 }
 
-trait IOBus {
+pub trait IOBus {
     fn in_port(&mut self, port: u8) -> u8;
     fn out_port(&mut self, port: u8, data: u8);
 }
 
-struct Cpu8080<MemMapT, IOBusT>
-where
-    MemMapT: MemoryMap,
-    IOBusT: IOBus,
-{
-    state: Cpu8080State,
-
-    // addressable space (16 bit address)
-    addr_space: MemMapT,
-
-    // I/O space (8 bit address)
-    io_space: IOBusT,
+pub struct Cpu8080 {
+    pub state: Cpu8080State,
 }
 
 mod flag_mask {
@@ -175,22 +179,16 @@ mod flag_mask {
     pub const PF: u8 = 4;
     pub const AF: u8 = 16;
     pub const ZF: u8 = 64;
-    pub const SF: u8 = 128;    
+    pub const SF: u8 = 128;
 
     pub const ALL_FLAGS: u8 = 0xff;
     pub const NO_FLAGS: u8 = 0;
 }
 
-impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
-where
-    MemMapT: MemoryMap,
-    IOBusT: IOBus,
-{
-    pub fn new(mem_map: MemMapT, io_bus: IOBusT) -> Self {
+impl Cpu8080 {
+    pub fn new() -> Self {
         return Self {
             state: Default::default(),
-            addr_space: mem_map,
-            io_space: io_bus,
         };
     }
 
@@ -198,14 +196,32 @@ where
         self.state.reg_pc = 0u16.into();
     }
 
-    fn consume8(&mut self) -> Result<u8, MemoryMapError> {
-        let b: u8 = self.addr_space.read_b(self.state.reg_pc.into())?;
+    pub fn interrupt(&mut self, opcode: u8) {
+        if !self.state.interrupt_enabled {
+            return;
+        }
+        
+        self.state.interrupt_request = true;
+        self.state.interrupt_opcode = opcode;
+    }
+
+    pub fn interrupt_rst(&mut self, routine_number: u8) {
+        if routine_number >= 8 {
+            panic!("routine number must be less than 8");
+        }
+
+        // opcode = 11nnn111
+        self.interrupt((routine_number << 3) | 0xc7);
+    }
+
+    fn consume8<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u8, MemoryMapError> {
+        let b: u8 = addr_space.read_b(self.state.reg_pc.into())?;
         self.state.reg_pc += 1;
         return Ok(b);
     }
 
-    fn consume16(&mut self) -> Result<u16, MemoryMapError> {
-        return Ok((self.consume8()? as u16) + ((self.consume8()? as u16) << 8));
+    fn consume16<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u16, MemoryMapError> {
+        return Ok((self.consume8(addr_space)? as u16) + ((self.consume8(addr_space)? as u16) << 8));
     }
 
     pub fn cycle(&mut self) {}
@@ -373,11 +389,11 @@ mod tests {
             mem.buff[i as usize] = i as u8;
         }
 
-        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        let mut cpu = Cpu8080::new();
         cpu.state.reg_pc = 0;
 
         for i in 0..N_IT {
-            let b = cpu.consume8().unwrap();
+            let b = cpu.consume8(&mem).unwrap();
             println!("PC: {}; b: {}", cpu.state.reg_pc, b);
 
             assert_eq!(b, i as u8);
@@ -395,16 +411,16 @@ mod tests {
         mem.buff[0] = BL;
         mem.buff[1] = BH;
 
-        let mut cpu = Cpu8080::new(mem, TestIOBus {});
+        let mut cpu = Cpu8080::new();
         cpu.state.reg_pc = 0;
 
-        assert_eq!(cpu.consume16().unwrap(), W);
+        assert_eq!(cpu.consume16(&mem).unwrap(), W);
         assert_eq!(cpu.state.reg_pc, 2);
     }
 
     #[test]
     fn test_cpu_add_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0xffu8;
@@ -469,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_cpu_add_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ---------------
         let a = 0xffffu16;
@@ -534,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags8() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0x80u8;
@@ -561,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_cpu_sub_set_flags16() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
 
         // ------------
         let a = 0x0080u16;

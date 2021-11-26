@@ -106,11 +106,7 @@ impl fmt::Display for CondId {
     }
 }
 
-impl<MemMapT, IOBusT> Cpu8080<MemMapT, IOBusT>
-where
-    MemMapT: MemoryMap,
-    IOBusT: IOBus,
-{
+impl Cpu8080 {
     #[allow(dead_code)]
     fn get_reg8(&self, reg_id: RegId8) -> Reg8 {
         match reg_id {
@@ -179,18 +175,18 @@ where
     }
 
     #[allow(dead_code)]
-    fn push8(&mut self, b: u8) -> Result<(), MemoryMapError> {
+    fn push8<T: MemoryMap>(&mut self, addr_space: &mut T, b: u8) -> Result<(), MemoryMapError> {
         // decrease the stack pointer
         self.state.reg_sp -= 1;
 
         // save b in the stack
-        return self.addr_space.write_b(self.state.reg_sp.into(), b);
+        return addr_space.write_b(self.state.reg_sp.into(), b);
     }
 
     #[allow(dead_code)]
-    fn pop8(&mut self) -> Result<u8, MemoryMapError> {
+    fn pop8<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u8, MemoryMapError> {
         // read b from the stack
-        let b = self.addr_space.read_b(self.state.reg_sp.into());
+        let b = addr_space.read_b(self.state.reg_sp.into());
 
         // increase the stack pointer
         self.state.reg_sp += 1;
@@ -199,18 +195,18 @@ where
     }
 
     #[allow(dead_code)]
-    fn push16(&mut self, w: u16) -> Result<(), MemoryMapError> {
+    fn push16<T: MemoryMap>(&mut self, addr_space: &mut T, w: u16) -> Result<(), MemoryMapError> {
         // decrease the stack pointer
         self.state.reg_sp -= 2;
 
-        // save b in the stack
-        return self.addr_space.write_w(self.state.reg_sp.into(), w);
+        // save w in the stack
+        return addr_space.write_w(self.state.reg_sp.into(), w);
     }
 
     #[allow(dead_code)]
-    fn pop16(&mut self) -> Result<u16, MemoryMapError> {
-        // read b from the stack
-        let w = self.addr_space.read_w(self.state.reg_sp.into());
+    fn pop16<T: MemoryMap>(&mut self, addr_space: &T) -> Result<u16, MemoryMapError> {
+        // read w from the stack
+        let w = addr_space.read_w(self.state.reg_sp.into());
 
         // increase the stack pointer
         self.state.reg_sp += 2;
@@ -220,8 +216,21 @@ where
 
     #[allow(dead_code)]
     #[bitmatch]
-    pub fn fetch_and_execute(&mut self, execute: bool) -> Result<String, MemoryMapError> {
-        let opcode: u8 = self.consume8()?;
+    pub fn fetch_and_execute<MemMapT: MemoryMap, IOBusT: IOBus>(
+        &mut self,
+        execute: bool,
+        return_mnemonic: bool,
+        addr_space: &mut MemMapT,
+        io_space: &mut IOBusT,
+    ) -> Result<String, MemoryMapError> {
+        let opcode: u8 = if self.state.interrupt_enabled && self.state.interrupt_request {
+            self.state.interrupt_request = false;
+            self.state.interrupt_enabled = false;
+            self.state.interrupt_opcode
+        }
+        else {
+            self.consume8(addr_space)?
+        };
 
         #[allow(unused_assignments)]
         let mut mnemonic: String = format!("{:#04x}", opcode);
@@ -233,7 +242,9 @@ where
                 // HLT
                 "01110110" => {
                     // 0x76
-                    mnemonic = format!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tHLT\t\tUNIMPLEMENTED", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -243,7 +254,9 @@ where
                 "01dddsss" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tMOV {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -253,7 +266,7 @@ where
                         // src operand stored in memory
                         RegId8::M => {
                             let addr: u16 = self.state.reg_hl.into();
-                            self.addr_space.read_b(addr)?
+                            addr_space.read_b(addr)?
                         }
 
                         // src operand stored in register
@@ -265,7 +278,7 @@ where
                         // store dst operand in memory
                         RegId8::M => {
                             let addr: u16 = self.state.reg_hl.into();
-                            self.addr_space.write_b(addr, src_val)?;
+                            addr_space.write_b(addr, src_val)?;
                         }
 
                         // store dst operand in register
@@ -278,8 +291,10 @@ where
                 // MVI D,#   00DDD110 db       -       Move immediate to register
                 "00ddd110" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tMVI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tMVI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -289,7 +304,7 @@ where
                         // store dst operand in memory
                         RegId8::M => {
                             let addr: u16 = self.state.reg_hl.into();
-                            self.addr_space.write_b(addr, src_val)?;
+                            addr_space.write_b(addr, src_val)?;
                         }
 
                         // store dst operand in register
@@ -302,8 +317,10 @@ where
                 // LXI PP,#  00PP0001 lb hb    -       Load register pair immediate
                 "00pp0001" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    let src_val: u16 = self.consume16()?;
-                    mnemonic = format!("{:#04x}\tLXI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u16 = self.consume16(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLXI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -314,53 +331,61 @@ where
                 // LDA a     00111010 lb hb    -       Load A from memory
                 "00111010" => {
                     let dst_id: RegId8 = RegId8::A;
-                    let src_addr: u16 = self.consume16()?;
-                    mnemonic = format!("{:#04x}\tLDA {}, {}", opcode, dst_id, src_addr);
+                    let src_addr: u16 = self.consume16(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLDA {}, {}", opcode, dst_id, src_addr);
+                    }
                     if !execute {
                         break;
                     }
 
-                    let src_val: u8 = self.addr_space.read_b(src_addr)?;
+                    let src_val: u8 = addr_space.read_b(src_addr)?;
                     self.set_reg8(dst_id, src_val);
                 }
 
                 // STA a     00110010 lb hb    -       Store A to memory
                 "00110010" => {
-                    let dst_addr: u16 = self.consume16()?;
+                    let dst_addr: u16 = self.consume16(addr_space)?;
                     let src_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tSTA {}, {}", opcode, dst_addr, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTA {}, {}", opcode, dst_addr, src_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     let src_val = self.get_reg8(src_id);
-                    self.addr_space.write_b(dst_addr, src_val)?;
+                    addr_space.write_b(dst_addr, src_val)?;
                 }
 
                 // LHLD a    00101010 lb hb    -       Load H:L from memory
                 "00101010" => {
                     let dst_id: RegId16 = RegId16::HL;
-                    let src_addr: u16 = self.consume16()?;
-                    mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
+                    let src_addr: u16 = self.consume16(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLHLD {}, {}", opcode, dst_id, src_addr);
+                    }
                     if !execute {
                         break;
                     }
 
-                    let src_val: u16 = self.addr_space.read_w(src_addr)?;
+                    let src_val: u16 = addr_space.read_w(src_addr)?;
                     self.set_reg16(dst_id, src_val);
                 }
 
                 // SHLD a    00100010 lb hb    -       Store H:L to memory
                 "00100010" => {
-                    let dst_addr: u16 = self.consume16()?;
+                    let dst_addr: u16 = self.consume16(addr_space)?;
                     let src_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tSHLD {}, {}", opcode, dst_addr, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSHLD {}, {}", opcode, dst_addr, src_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     let src_val = self.get_reg16(src_id);
-                    self.addr_space.write_w(dst_addr, src_val)?;
+                    addr_space.write_w(dst_addr, src_val)?;
                 }
 
                 // LDAX PP   00pp1010 *1       -       Load indirect through BC or DE
@@ -371,13 +396,15 @@ where
                         RegId16::BC | RegId16::DE => {}
                         _ => panic!("Invalid src operand ({})", src_id),
                     }
-                    mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tLDAX {}, ({})", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     let src_addr: u16 = self.get_reg16(src_id);
-                    let src_val: u8 = self.addr_space.read_b(src_addr)?;
+                    let src_val: u8 = addr_space.read_b(src_addr)?;
                     self.set_reg8(dst_id, src_val);
                 }
 
@@ -389,21 +416,25 @@ where
                         RegId16::BC | RegId16::DE => {}
                         _ => panic!("Invalid src operand ({})", src_id),
                     }
-                    mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTAX ({}), {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     let dst_addr: u16 = self.get_reg16(dst_id);
                     let src_val: u8 = self.get_reg8(src_id);
-                    self.addr_space.write_b(dst_addr, src_val)?;
+                    addr_space.write_b(dst_addr, src_val)?;
                 }
 
                 // XCHG      11101011          -       Exchange DE and HL content
                 "11101011" => {
                     let dst_id = RegId16::DE;
                     let src_id = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXCHG {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -417,7 +448,9 @@ where
                 "10000sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tADD {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADD {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -425,7 +458,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -439,8 +472,10 @@ where
                 // ADI #     11000110 db       ZSCPA   Add immediate to A
                 "11000110" => {
                     let dst_id = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -455,7 +490,9 @@ where
                 "10001sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tADC {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tADC {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -463,7 +500,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -480,8 +517,10 @@ where
                 // ACI #     11001110 db       ZSCPA   Add immediate to A with carry
                 "11001110" => {
                     let dst_id = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tACI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -499,7 +538,9 @@ where
                 "10010sss" => {
                     let dst_id = RegId8::A;
                     let src_id = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tSUB {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSUB {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -507,7 +548,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -521,8 +562,10 @@ where
                 // SUI #     11010110 db       ZSCPA   Subtract immediate from A
                 "11010110" => {
                     let dst_id = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSUI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -537,7 +580,9 @@ where
                 "10011sss" => {
                     let dst_id = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tSBB {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSBB {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -545,7 +590,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -562,8 +607,10 @@ where
                 // SBI #     11011110 db       ZSCPA   Subtract immediate from A with borrow
                 "11011110" => {
                     let dst_id = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tSBI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSBI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -580,7 +627,9 @@ where
                 // INR D     00DDD100          ZSPA    Increment register
                 "00ddd100" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
-                    mnemonic = format!("{:#04x}\tINR {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINR {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -588,7 +637,7 @@ where
                     let dst_val: u8 = match dst_id {
                         RegId8::M => {
                             let dst_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(dst_addr)?
+                            addr_space.read_b(dst_addr)?
                         }
                         _ => self.get_reg8(dst_id),
                     };
@@ -602,7 +651,7 @@ where
                     match dst_id {
                         RegId8::M => {
                             let dst_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.write_b(dst_addr, res)?
+                            addr_space.write_b(dst_addr, res)?
                         }
                         _ => self.set_reg8(dst_id, res),
                     };
@@ -611,7 +660,9 @@ where
                 // DCR D     00DDD101          ZSPA    Decrement register
                 "00ddd101" => {
                     let dst_id: RegId8 = REG_ID8_MAP[d as usize];
-                    mnemonic = format!("{:#04x}\tDCR {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDCR {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -619,7 +670,7 @@ where
                     let dst_val: u8 = match dst_id {
                         RegId8::M => {
                             let dst_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(dst_addr)?
+                            addr_space.read_b(dst_addr)?
                         }
                         _ => self.get_reg8(dst_id),
                     };
@@ -633,7 +684,7 @@ where
                     match dst_id {
                         RegId8::M => {
                             let dst_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.write_b(dst_addr, res)?
+                            addr_space.write_b(dst_addr, res)?
                         }
                         _ => self.set_reg8(dst_id, res),
                     };
@@ -642,7 +693,9 @@ where
                 // INX PP    00PP0011          -       Increment register pair
                 "00pp0011" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tINX {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINX {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -657,7 +710,9 @@ where
                 // DCX PP    00PP1011          -       Decrement register pair
                 "00pp1011" => {
                     let dst_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tDCX {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDCX {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -673,7 +728,9 @@ where
                 "00pp1001" => {
                     let dst_id = RegId16::HL;
                     let src_id: RegId16 = REG_ID16_MAP[p as usize];
-                    mnemonic = format!("{:#04x}\tDAD {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDAD {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -690,7 +747,9 @@ where
                 // DAA       00100111          ZSPCA   Decimal Adjust accumulator
                 "00100111" => {
                     let dst_id = RegId8::A;
-                    mnemonic = format!("{:#04x}\tDAA", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDAA", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -714,7 +773,11 @@ where
                     }
 
                     // trick to update accordingly all other flags
-                    self.add_set_flags8(res, 0, flag_mask::ALL_FLAGS & !flag_mask::AF & !flag_mask::CF);
+                    self.add_set_flags8(
+                        res,
+                        0,
+                        flag_mask::ALL_FLAGS & !flag_mask::AF & !flag_mask::CF,
+                    );
 
                     self.set_reg8(dst_id, res);
                 }
@@ -723,7 +786,9 @@ where
                 "10100sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tANA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tANA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -731,7 +796,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -750,8 +815,10 @@ where
                 // ANI #     11100110 db       ZSPCA   AND immediate with A
                 "11100110" => {
                     let dst_id: RegId8 = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tANI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tANI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -765,7 +832,6 @@ where
                     self.state.flags.cf = false;
                     self.state.flags.af = false;
 
-                    
                     self.set_reg8(dst_id, res);
                 }
 
@@ -773,7 +839,9 @@ where
                 "10110sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tORA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tORA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -781,7 +849,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -800,8 +868,10 @@ where
                 // ORI #     11110110          ZSPCA   OR  immediate with A
                 "11110110" => {
                     let dst_id: RegId8 = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tORI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tORI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -821,7 +891,9 @@ where
                 "10101sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tXRA {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXRA {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -829,7 +901,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -849,8 +921,10 @@ where
                 // XRI #     11101110 db       ZSPCA   ExclusiveOR immediate with A
                 "11101110" => {
                     let dst_id: RegId8 = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tXRI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXRI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -870,7 +944,9 @@ where
                 "10111sss" => {
                     let dst_id: RegId8 = RegId8::A;
                     let src_id: RegId8 = REG_ID8_MAP[s as usize];
-                    mnemonic = format!("{:#04x}\tCMP {}, {}", opcode, dst_id, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMP {}, {}", opcode, dst_id, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -878,7 +954,7 @@ where
                     let src_val: u8 = match src_id {
                         RegId8::M => {
                             let src_addr = self.get_reg16(RegId16::HL);
-                            self.addr_space.read_b(src_addr)?
+                            addr_space.read_b(src_addr)?
                         }
                         _ => self.get_reg8(src_id),
                     };
@@ -890,19 +966,17 @@ where
                 // CPI #     11111110          ZSPCA   Compare immediate with A
                 "11111110" => {
                     let dst_id: RegId8 = RegId8::A;
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tCPI {}, ${}", opcode, dst_id, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCPI {}, ${}", opcode, dst_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
                     // trick to update accordingly all flags
                     let dst_val: u8 = self.get_reg8(dst_id);
-                    self.sub_set_flags8(
-                        dst_val,
-                        src_val,
-                        flag_mask::ALL_FLAGS
-                    );
+                    self.sub_set_flags8(dst_val, src_val, flag_mask::ALL_FLAGS);
                 }
 
                 // ROTATE ACCUMULATOR INSTRUCTIONS
@@ -919,7 +993,9 @@ where
                         3 => "RAR".into(),
                         _ => panic!("This can't happen"),
                     };
-                    mnemonic = format!("{:#04x}\t{} {}", opcode, mne, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\t{} {}", opcode, mne, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -932,11 +1008,8 @@ where
                             self.state.flags.cf = msb;
 
                             let res: u8 = (dst_val << 1) + msb as u8;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RRC
                         1 => {
@@ -944,11 +1017,8 @@ where
                             self.state.flags.cf = lsb;
 
                             let res: u8 = (dst_val >> 1) + if lsb { 0x80 } else { 0 };
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RAL
                         2 => {
@@ -958,11 +1028,8 @@ where
                             self.state.flags.cf = msb;
 
                             let res: u8 = (dst_val << 1) + old_carry as u8;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            self.set_reg8(dst_id, res);
+                        }
 
                         // RAR
                         3 => {
@@ -971,22 +1038,20 @@ where
                             let old_carry: bool = self.state.flags.cf;
                             self.state.flags.cf = lsb;
 
-                            let res: u8 = (dst_val >> 1) + if old_carry { 0x80 } else { 0 } ;
-                            self.set_reg8(
-                                dst_id,
-                                res
-                            );
-                        },
+                            let res: u8 = (dst_val >> 1) + if old_carry { 0x80 } else { 0 };
+                            self.set_reg8(dst_id, res);
+                        }
 
                         _ => {}
                     }
                 }
 
-
                 // CMA       00101111          -       Compliment A
                 "00101111" => {
                     let dst_id: RegId8 = RegId8::A;
-                    mnemonic = format!("{:#04x}\tCMA {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMA {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -997,7 +1062,9 @@ where
 
                 // CMC       00111111          C       Compliment Carry flag
                 "00111111" => {
-                    mnemonic = format!("{:#04x}\tCMC", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCMC", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1007,7 +1074,9 @@ where
 
                 // STC       00110111          C       Set Carry flag
                 "00110111" => {
-                    mnemonic = format!("{:#04x}\tSTC", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSTC", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1017,8 +1086,10 @@ where
 
                 // JMP a     11000011 lb hb    -       Unconditional jump
                 "11000011" => {
-                    let src_val: u16 = self.consume16()?;
-                    mnemonic = format!("{:#04x}\tJMP ${:#06x}", opcode, src_val);
+                    let src_val: u16 = self.consume16(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tJMP ${:#06x}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1028,9 +1099,11 @@ where
 
                 // Jccc a    11CCC010 lb hb    -       Conditional jump
                 "11ccc010" => {
-                    let src_val: u16 = self.consume16()?;
+                    let src_val: u16 = self.consume16(addr_space)?;
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tJ{} ${:#06x}", opcode, cond_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tJ{} ${:#06x}", opcode, cond_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
@@ -1042,14 +1115,16 @@ where
 
                 // CALL a    11001101 lb hb    -       Unconditional subroutine call
                 "11001101" => {
-                    let src_val: u16 = self.consume16()?;
-                    mnemonic = format!("{:#04x}\tCALL ${:#06x}", opcode, src_val);
+                    let src_val: u16 = self.consume16(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCALL ${:#06x}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
                     // save the program counter in the stack
-                    self.push16(self.state.reg_pc)?;
+                    self.push16(addr_space, self.state.reg_pc)?;
 
                     // jump to the new addres
                     self.state.reg_pc = src_val.into();
@@ -1057,16 +1132,18 @@ where
 
                 // Cccc a    11CCC100 lb hb    -       Conditional subroutine call
                 "11ccc100" => {
-                    let src_val: u16 = self.consume16()?;
+                    let src_val: u16 = self.consume16(addr_space)?;
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tCALL{} ${:#06x}", opcode, cond_id, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tCALL{} ${:#06x}", opcode, cond_id, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
                     if self.check_condition(cond_id) {
                         // save the program counter in the stack
-                        self.push16(self.state.reg_pc)?;
+                        self.push16(addr_space, self.state.reg_pc)?;
 
                         // jump to the new addres
                         self.state.reg_pc = src_val.into();
@@ -1075,37 +1152,43 @@ where
 
                 // RET       11001001          -       Unconditional return from subroutine
                 "11001001" => {
-                    mnemonic = format!("{:#04x}\tRET", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRET", opcode);
+                    }
                     if !execute {
                         break;
                     }
 
-                    self.state.reg_pc = self.pop16()?;
+                    self.state.reg_pc = self.pop16(addr_space)?;
                 }
 
                 // Rccc      11CCC000          -       Conditional return from subroutine
                 "11ccc000" => {
                     let cond_id: CondId = COND_ID_MAP[c as usize];
-                    mnemonic = format!("{:#04x}\tRET{}", opcode, cond_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRET{}", opcode, cond_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     if self.check_condition(cond_id) {
-                        self.state.reg_pc = self.pop16()?;
+                        self.state.reg_pc = self.pop16(addr_space)?;
                     }
                 }
 
                 // RST n     11NNN111          -       Restart (Call n*8)
                 "11nnn111" => {
                     let src_val = n as u16; // n * 8
-                    mnemonic = format!("{:#04x}\tRST{}", opcode, src_val);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tRST{}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
                     // save the program counter in the stack
-                    self.push16(self.state.reg_pc)?;
+                    self.push16(addr_space, self.state.reg_pc)?;
 
                     // jump to the new addres
                     self.state.reg_pc = src_val << 3;
@@ -1114,7 +1197,9 @@ where
                 // PCHL      11101001          -       Jump to address in H:L
                 "11101001" => {
                     let src_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tPCHL {}", opcode, src_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPCHL {}", opcode, src_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1127,10 +1212,12 @@ where
                     let src_id: RegId16 = REG_ID16_MAP[p as usize];
                     let src_mne: String = match src_id {
                         RegId16::SP => "PSW".into(),
-                        _ => format!("{}", src_id)
+                        _ => format!("{}", src_id),
                     };
 
-                    mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPUSH {}", opcode, src_mne);
+                    }
                     if !execute {
                         break;
                     }
@@ -1141,11 +1228,11 @@ where
                             let psw_h: u8 = self.get_reg8(RegId8::A);
                             let psw: u16 = (psw_l as u16) + ((psw_h as u16) << 8);
                             psw
-                        },
+                        }
                         _ => self.get_reg16(src_id),
-                    };                    
-                    
-                    self.push16(src_val)?;
+                    };
+
+                    self.push16(addr_space, src_val)?;
                 }
 
                 // POP PP    11PP0001 *2       *2      Pop  register pair from the stack
@@ -1156,43 +1243,45 @@ where
                         _ => format!("{}", dst_id),
                     };
 
-                    mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_mne);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tPOP {}", opcode, dst_mne);
+                    }
                     if !execute {
                         break;
                     }
 
-                    let w: u16 = self.pop16()?;
+                    let w: u16 = self.pop16(addr_space)?;
                     match dst_id {
                         RegId16::SP => {
                             self.state.flags = ((w & 0x00ff) as u8).into();
-                            self.set_reg8(
-                                RegId8::A,
-                                (w >> 8) as u8
-                            );
-                        },
-                        _ => { self.set_reg16(dst_id, w) },
+                            self.set_reg8(RegId8::A, (w >> 8) as u8);
+                        }
+                        _ => self.set_reg16(dst_id, w),
                     };
-                    
                 }
 
                 // XTHL      11100011          -       Swap H:L with top word on stack
                 "11100011" => {
                     let dst_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tXTHL {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tXTHL {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
 
                     let swap = self.get_reg16(dst_id);
-                    let w: u16 = self.pop16()?;
+                    let w: u16 = self.pop16(addr_space)?;
                     self.set_reg16(dst_id, w);
-                    self.push16(swap)?;
+                    self.push16(addr_space, swap)?;
                 }
 
                 // SPHL      11111001          -       Set SP to content of H:L
                 "11111001" => {
                     let dst_id: RegId16 = RegId16::HL;
-                    mnemonic = format!("{:#04x}\tSPHL {}", opcode, dst_id);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tSPHL {}", opcode, dst_id);
+                    }
                     if !execute {
                         break;
                     }
@@ -1202,51 +1291,61 @@ where
 
                 // IN p      11011011 pa       -       Read input port into A
                 "11011011" => {
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tIN ${}", opcode, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tIN ${}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
-                    let dst_val = self.io_space.in_port(src_val);
+                    let dst_val = io_space.in_port(src_val);
                     self.state.reg_a = dst_val;
                 }
 
                 // OUT p     11010011 pa       -       Write A to output port
                 "11010011" => {
-                    let src_val: u8 = self.consume8()?;
-                    mnemonic = format!("{:#04x}\tOUT ${}", opcode, src_val);
+                    let src_val: u8 = self.consume8(addr_space)?;
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tOUT ${}", opcode, src_val);
+                    }
                     if !execute {
                         break;
                     }
 
                     let dst_val = self.state.reg_a;
-                    self.io_space.out_port(src_val, dst_val);
+                    io_space.out_port(src_val, dst_val);
                 }
 
                 // EI        11111011          -       Enable interrupts
                 "11111011" => {
-                    mnemonic = format!("{:#04x}\tEI", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tEI", opcode);
+                    }
                     if !execute {
                         break;
                     }
 
-                    self.state.interrutpions_enabled = true;
+                    self.state.interrupt_enabled = true;
                 }
 
                 // DI        11110011          -       Disable interrupts
                 "11110011" => {
-                    mnemonic = format!("{:#04x}\tDI", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tDI", opcode);
+                    }
                     if !execute {
                         break;
                     }
 
-                    self.state.interrutpions_enabled = false;
+                    self.state.interrupt_enabled = false;
                 }
 
                 // NOP       00000000          -       No operation
                 "00000000" => {
-                    mnemonic = format!("{:#04x}\tNOP", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tNOP", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1254,7 +1353,9 @@ where
 
                 _ => {
                     // unimplemented_instruction!(opcode);
-                    mnemonic = format!("{:#04x}\tINVALID INSTRUCTION", opcode);
+                    if return_mnemonic {
+                        mnemonic = format!("{:#04x}\tINVALID INSTRUCTION", opcode);
+                    }
                     if !execute {
                         break;
                     }
@@ -1274,18 +1375,23 @@ mod tests {
 
     #[test]
     fn test_all_instructions_decoding() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, TestIOBus {});
+        let mut cpu = Cpu8080::new();
+        let mut addr_space = TestMemory { buff: [0; 65536] };
+        let mut io_space = TestIOBus {};
 
         for i in 0x00..=0xff {
             // avoid panics caused by not being able to grow / shrink the stack
             cpu.state.reg_sp = 1024;
 
             // set the next instruction
-            cpu.addr_space.buff[cpu.state.reg_pc as usize] = i;
+            addr_space.buff[cpu.state.reg_pc as usize] = i;
 
-            println!("{}", cpu.fetch_and_execute(true).unwrap());
+            let mnemonic = cpu
+                .fetch_and_execute(true, true, &mut addr_space, &mut io_space)
+                .unwrap();
+            println!("{}", mnemonic);
         }
-    }    
+    }
 
     struct CpudiagIOBus {}
     impl IOBus for CpudiagIOBus {
@@ -1293,22 +1399,22 @@ mod tests {
             return 0;
         }
 
-        fn out_port(&mut self, port: u8, data: u8) {
-            
-        }
+        fn out_port(&mut self, port: u8, data: u8) {}
     }
 
     #[test]
     fn test_cpudiag_full() {
-        let mut cpu = Cpu8080::new(TestMemory { buff: [0; 65536] }, CpudiagIOBus {});
+        let mut cpu = Cpu8080::new();
+        let mut addr_space = TestMemory { buff: [0; 65536] };
+        let mut io_space = TestIOBus {};
 
         // add the bios
-        cpu.addr_space.buff[0x0005] = 0xc9; // RET
+        addr_space.buff[0x0005] = 0xc9; // RET
 
         // add the program
         const FIRST_ADDR: usize = 0x0100;
         for i in 0..CPUDIAG_BIN.len() {
-            cpu.addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
+            addr_space.buff[i + FIRST_ADDR] = CPUDIAG_BIN[i];
         }
 
         let mut log_instructions = true;
@@ -1320,11 +1426,13 @@ mod tests {
 
             if curr_pc == 0x0005 {
                 match cpu.state.reg_bc.l {
-                    2 => program_output = format!("{}{}", program_output, cpu.state.reg_de.l as char),
+                    2 => {
+                        program_output = format!("{}{}", program_output, cpu.state.reg_de.l as char)
+                    }
                     9 => {
                         let mut i: u16 = cpu.state.reg_de.into();
                         loop {
-                            let c: char = cpu.addr_space.buff[i as usize] as char;
+                            let c: char = addr_space.buff[i as usize] as char;
                             if c == '$' {
                                 break;
                             }
@@ -1332,7 +1440,7 @@ mod tests {
                             i += 1;
                             program_output = format!("{}{}", program_output, c);
                         }
-                    }                    
+                    }
                     _ => {}
                 };
             }
@@ -1346,7 +1454,9 @@ mod tests {
                 break;
             }
 
-            let mne: String = cpu.fetch_and_execute(true).unwrap();
+            let mne: String = cpu
+                .fetch_and_execute(true, true, &mut addr_space, &mut io_space)
+                .unwrap();
             if log_instructions {
                 println!("{:#06x}|{:30}{}", curr_pc, mne, curr_state);
             }
@@ -1354,5 +1464,31 @@ mod tests {
 
         println!("\n\nProgram output:\n{}\n", program_output);
         assert_eq!(program_output, "\u{c}\r\n CPU IS OPERATIONAL");
+    }
+
+    
+    #[test]    
+    fn test_cpu_frequency() {
+        let mut cpu = Cpu8080::new();
+        let mut addr_space = TestMemory { buff: [0; 65536] };
+        let mut io_space = TestIOBus {};
+        
+        cpu.state.reg_sp = 1000;
+
+        let n_cycles = 10_000_000;
+        let starting_instant = time::Instant::now();
+        for _i in 0..n_cycles {
+            cpu.state.reg_pc = 0;
+            addr_space.buff[cpu.state.reg_pc as usize] = 0; // NOP because is a one cycle instruction
+            cpu.fetch_and_execute(true, false, &mut addr_space, &mut io_space).unwrap();
+        }
+
+        let ellapsed = starting_instant.elapsed();
+
+        println!("No. of cycles: {}\nTime ellapsed: {} ms\nAverage frequency: {} Hz",
+            n_cycles,
+            ellapsed.as_millis(),
+            (n_cycles as f64) / ellapsed.as_secs_f64(),
+        );
     }
 }
